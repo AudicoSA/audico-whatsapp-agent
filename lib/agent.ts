@@ -14,7 +14,7 @@ import {
   updateConversation
 } from './supabase';
 import { whatsapp } from './whatsapp';
-import { Conversation, Product, QuoteItem } from './types';
+import { Conversation, Product } from './types';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -63,11 +63,6 @@ WHEN TO ESCALATE:
 
 Remember: You're having a WhatsApp conversation, not writing an email. Keep it conversational and concise!`;
 
-interface ToolCall {
-  name: string;
-  input: Record<string, unknown>;
-}
-
 interface AgentResponse {
   message: string;
   toolsUsed: string[];
@@ -82,7 +77,7 @@ interface AgentResponse {
 export async function processMessage(
   conversation: Conversation,
   customerMessage: string,
-  customerPhone: string
+  _customerPhone: string
 ): Promise<AgentResponse> {
   // Get recent conversation history
   const recentMessages = await getRecentMessages(conversation.id, 10);

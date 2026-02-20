@@ -17,7 +17,7 @@ const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
  */
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  
+
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         if (change.field !== 'messages') continue;
 
         const { messages, contacts } = change.value;
-        
+
         // Handle incoming messages
         if (messages && messages.length > 0) {
           for (const message of messages) {
@@ -88,12 +88,12 @@ async function handleIncomingMessage(
 
   // Extract message text
   let text = '';
-  
+
   switch (type) {
     case 'text':
       text = message.text?.body || '';
       break;
-    
+
     case 'interactive':
       if (message.interactive?.button_reply) {
         text = message.interactive.button_reply.id;
@@ -101,12 +101,12 @@ async function handleIncomingMessage(
         text = message.interactive.list_reply.id;
       }
       break;
-    
+
     case 'button':
       // Quick reply button
       text = message.text?.body || '';
       break;
-    
+
     default:
       // Unsupported message type
       await whatsapp.sendText({
@@ -123,7 +123,7 @@ async function handleIncomingMessage(
 
   // Check for special commands
   const lowerText = text.toLowerCase().trim();
-  
+
   if (lowerText === 'hi' || lowerText === 'hello' || lowerText === 'start') {
     await sendWelcomeMessage(phoneNumber, customerName);
     return;
@@ -162,7 +162,7 @@ async function handleIncomingMessage(
  */
 async function sendWelcomeMessage(phone: string, name?: string): Promise<void> {
   const greeting = name ? `Hi ${name}! 👋` : "Hi there! 👋";
-  
+
   await whatsapp.sendText({
     to: phone,
     text: `${greeting}

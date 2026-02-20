@@ -1,15 +1,15 @@
-# Audico WhatsApp Agent 🎧
+# Audico WhatsApp Agent
 
 AI-powered WhatsApp sales assistant for Audico Online. Helps customers find products, build quotes, and get recommendations.
 
 ## Features
 
-- 🤖 **AI-Powered Conversations** - Uses Claude Sonnet for natural language understanding
-- 🔍 **Product Search** - Searches Audico's 10,000+ product catalog
-- 💰 **Quote Builder** - Helps customers build quotes with accurate pricing
-- 📱 **WhatsApp Native** - Interactive buttons, lists, and rich messages
-- 🔄 **Conversation Memory** - Maintains context across messages
-- 👤 **Human Escalation** - Seamlessly transfers to Kenny when needed
+- **AI-Powered Conversations** - Uses Claude Sonnet for natural language understanding
+- **Product Search** - Searches Audico's 10,000+ product catalog
+- **Quote Builder** - Helps customers build quotes with accurate pricing
+- **WhatsApp Native** - Interactive buttons, lists, and rich messages
+- **Conversation Memory** - Maintains context across messages
+- **Human Escalation** - Seamlessly transfers to Kenny when needed
 
 ## Architecture
 
@@ -33,7 +33,7 @@ AI-powered WhatsApp sales assistant for Audico Online. Helps customers find prod
 
 - Node.js 18+
 - Meta Business Account with WhatsApp API access
-- Supabase project (same as audico-chat-quote)
+- Supabase project (same as main Audico system)
 - Anthropic API key
 
 ### 2. Environment Variables
@@ -50,55 +50,21 @@ WHATSAPP_BUSINESS_ACCOUNT_ID=123456789
 # AI
 ANTHROPIC_API_KEY=sk-ant-...
 
-# Supabase (same as chat-quote)
+# Supabase (same as main Audico system)
 SUPABASE_URL=https://ajdehycoypilsegmxbto.supabase.co
 SUPABASE_SERVICE_KEY=eyJhbGc...
 ```
 
 ### 3. Database Setup
 
-Run these SQL commands in Supabase to create the required tables:
+Run the migration in Supabase SQL Editor (see `supabase/migrations/001_whatsapp_tables.sql`).
 
-```sql
--- Conversations table
-CREATE TABLE whatsapp_conversations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  phone_number TEXT NOT NULL,
-  customer_name TEXT,
-  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'pending_quote', 'completed', 'escalated')),
-  context JSONB DEFAULT '{"quote_items": []}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Messages table
-CREATE TABLE whatsapp_messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  conversation_id UUID REFERENCES whatsapp_conversations(id) ON DELETE CASCADE,
-  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-  content TEXT NOT NULL,
-  metadata JSONB DEFAULT '{}'::jsonb,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Indexes
-CREATE INDEX idx_wa_conv_phone ON whatsapp_conversations(phone_number);
-CREATE INDEX idx_wa_conv_status ON whatsapp_conversations(status);
-CREATE INDEX idx_wa_msg_conv ON whatsapp_messages(conversation_id);
-CREATE INDEX idx_wa_msg_created ON whatsapp_messages(created_at DESC);
-
--- RLS Policies (service role bypasses these)
-ALTER TABLE whatsapp_conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE whatsapp_messages ENABLE ROW LEVEL SECURITY;
-```
+This creates `whatsapp_conversations` and `whatsapp_messages` tables.
 
 ### 4. Deploy to Vercel
 
 ```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
+npm install
 vercel
 ```
 
@@ -110,6 +76,10 @@ vercel
 4. Set webhook URL: `https://your-vercel-url.vercel.app/api/webhook`
 5. Set verify token: same as `WHATSAPP_VERIFY_TOKEN`
 6. Subscribe to: `messages`
+
+## WhatsApp Number
+
+Verified number: **+27 61 874 8005** (Audico Support)
 
 ## Usage
 
@@ -170,6 +140,9 @@ whatsapp-agent/
 │   ├── supabase.ts            # Database & product search
 │   ├── types.ts               # TypeScript types
 │   └── whatsapp.ts            # WhatsApp API client
+├── supabase/
+│   └── migrations/
+│       └── 001_whatsapp_tables.sql
 ├── .env.example
 ├── package.json
 ├── README.md
@@ -204,7 +177,3 @@ When the agent escalates to Kenny:
 - [ ] Image recognition for product inquiries
 - [ ] Automated follow-ups for abandoned quotes
 - [ ] Multi-language support (Afrikaans, Zulu)
-
----
-
-Built for Audico by Jason (AI COO) 🎧

@@ -184,7 +184,7 @@ export class WhatsAppClient {
   async sendProductCards({ to, products, header }: ProductCardMessage): Promise<boolean> {
     // WhatsApp doesn't have native product cards, so we format nicely
     let text = header ? `*${header}*\n\n` : '';
-    
+
     products.forEach((product, index) => {
       text += `${index + 1}. *${product.name}*\n`;
       text += `   💰 R${product.price.toLocaleString()}\n`;
