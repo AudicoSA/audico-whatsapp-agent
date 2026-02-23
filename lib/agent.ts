@@ -155,7 +155,7 @@ export async function processMessage(
   try {
     // Call Claude with tools
     const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-latest',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       tools,
@@ -196,10 +196,9 @@ export async function processMessage(
           });
         }
 
-        // If tools were used, we need to continue the conversation
         if (response.stop_reason === 'tool_use') {
           const followUp = await anthropic.messages.create({
-            model: 'claude-3-5-sonnet-latest',
+            model: 'claude-3-5-sonnet-20241022',
             max_tokens: 1024,
             system: SYSTEM_PROMPT,
             tools,
