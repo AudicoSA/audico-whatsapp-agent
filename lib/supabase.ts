@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { Product, Conversation, ConversationContext, QuoteItem } from './types';
+import { Product, Conversation, ConversationContext, QuoteRequest, QuoteRequestDetails } from './types';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -48,7 +48,7 @@ export async function searchProducts(
 
     if (error) {
       console.error('[Search] BM25 search error:', error);
-      
+
       // Fallback to simple text search
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('products')
@@ -115,7 +115,7 @@ export async function getOrCreateConversation(
 
   // Create new conversation
   const newContext: ConversationContext = {
-    quote_items: [],
+    collected_details: {},
   };
 
   const { data: created, error } = await supabase
@@ -158,71 +158,30 @@ export async function updateConversation(
 }
 
 /**
- * Add item to quote
+ * Save a finalized quote request from the AI agent into the database
  */
-export async function addToQuote(
-  conversationId: string,
-  product: Product,
-  quantity: number = 1
-): Promise<QuoteItem[]> {
-  // Get current conversation
-  const { data: conversation } = await supabase
-    .from('whatsapp_conversations')
-    .select('context')
-    .eq('id', conversationId)
+export async function saveQuoteRequest(
+  phoneNumber: string,
+  customerName: string | undefined,
+  details: QuoteRequestDetails
+): Promise<QuoteRequest> {
+  const { data, error } = await supabase
+    .from('whatsapp_quote_requests')
+    .insert({
+      phone_number: phoneNumber,
+      customer_name: customerName,
+      status: 'new',
+      details: details,
+    })
+    .select()
     .single();
 
-  if (!conversation) {
-    throw new Error('Conversation not found');
+  if (error) {
+    console.error('[QuoteRequest] Save error:', error);
+    throw new Error(`Failed to save quote request: ${error.message}`);
   }
 
-  const context = conversation.context as ConversationContext;
-  const existingIndex = context.quote_items.findIndex(
-    (item) => item.product_id === product.id
-  );
-
-  const newItem: QuoteItem = {
-    product_id: product.id,
-    product_name: product.product_name,
-    sku: product.sku,
-    brand: product.brand,
-    quantity,
-    unit_price: product.retail_price,
-    total_price: product.retail_price * quantity,
-  };
-
-  if (existingIndex >= 0) {
-    // Update existing item quantity
-    context.quote_items[existingIndex].quantity += quantity;
-    context.quote_items[existingIndex].total_price =
-      context.quote_items[existingIndex].quantity *
-      context.quote_items[existingIndex].unit_price;
-  } else {
-    // Add new item
-    context.quote_items.push(newItem);
-  }
-
-  // Save updated context
-  await updateConversation(conversationId, { context });
-
-  return context.quote_items;
-}
-
-/**
- * Clear quote
- */
-export async function clearQuote(conversationId: string): Promise<void> {
-  const { data: conversation } = await supabase
-    .from('whatsapp_conversations')
-    .select('context')
-    .eq('id', conversationId)
-    .single();
-
-  if (conversation) {
-    const context = conversation.context as ConversationContext;
-    context.quote_items = [];
-    await updateConversation(conversationId, { context });
-  }
+  return data as QuoteRequest;
 }
 
 /**

@@ -1,269 +1,98 @@
-/**
- * WhatsApp Cloud API Client
- * Handles sending messages via Meta's WhatsApp Business API
- */
-
-const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0';
-
-interface TextMessage {
-  to: string;
-  text: string;
-  replyTo?: string;
-}
-
-interface ButtonMessage {
-  to: string;
-  body: string;
-  buttons: Array<{ id: string; title: string }>;
-  header?: string;
-  footer?: string;
-  replyTo?: string;
-}
-
-interface ListMessage {
-  to: string;
-  body: string;
-  buttonText: string;
-  sections: Array<{
-    title: string;
-    rows: Array<{ id: string; title: string; description?: string }>;
-  }>;
-  header?: string;
-  footer?: string;
-}
-
-interface ProductCardMessage {
-  to: string;
-  products: Array<{
-    name: string;
-    price: number;
-    sku: string;
-    image?: string;
-    id: string;
-  }>;
-  header?: string;
-}
+import { Client, LocalAuth } from 'whatsapp-web.js';
+import qrcode from 'qrcode-terminal';
 
 export class WhatsAppClient {
-  private phoneNumberId: string;
-  private accessToken: string;
+  public client: Client;
+  private isReady: boolean = false;
 
   constructor() {
-    this.phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID!;
-    this.accessToken = process.env.WHATSAPP_ACCESS_TOKEN!;
+    console.log('[WhatsApp] Initializing Web Client...');
 
-    if (!this.phoneNumberId || !this.accessToken) {
-      console.error('[WhatsApp] Missing credentials');
-    }
+    // Use LocalAuth to save session data so we don't have to scan the QR code every time
+    this.client = new Client({
+      authStrategy: new LocalAuth({
+        dataPath: './.whatsapp_auth',
+      }),
+      // Puppeteer arguments to ensure it runs well on Railway/Linux
+      puppeteer: {
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      }
+    });
+
+    this.setupListeners();
   }
 
-  private async sendRequest(payload: Record<string, unknown>): Promise<boolean> {
-    try {
-      const response = await fetch(
-        `${WHATSAPP_API_URL}/${this.phoneNumberId}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${this.accessToken}`,
-          },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            ...payload,
-          }),
-        }
-      );
+  private setupListeners() {
+    this.client.on('qr', (qr) => {
+      console.log('\n==================================================');
+      console.log('📱 ACTION REQUIRED: Scan this QR Code with WhatsApp');
+      console.log('==================================================\n');
+      qrcode.generate(qr, { small: true });
+    });
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('[WhatsApp] Send error:', error);
-        return false;
-      }
+    this.client.on('ready', () => {
+      console.log('[WhatsApp] ✔️ Client is ready and connected!');
+      this.isReady = true;
+    });
 
-      const result = await response.json();
-      console.log('[WhatsApp] Message sent:', result.messages?.[0]?.id);
-      return true;
-    } catch (error) {
-      console.error('[WhatsApp] Request failed:', error);
-      return false;
-    }
+    this.client.on('authenticated', () => {
+      console.log('[WhatsApp] ✔️ Authenticated successfully.');
+    });
+
+    this.client.on('auth_failure', (msg) => {
+      console.error('[WhatsApp] ❌ Authentication failed:', msg);
+    });
+
+    this.client.on('disconnected', (reason) => {
+      console.log('[WhatsApp] ⚠️ Client was disconnected:', reason);
+      this.isReady = false;
+    });
+  }
+
+  /**
+   * Initialize and start the client
+   */
+  public async initialize(): Promise<void> {
+    await this.client.initialize();
   }
 
   /**
    * Send a simple text message
    */
-  async sendText({ to, text, replyTo }: TextMessage): Promise<boolean> {
-    const payload: Record<string, unknown> = {
-      recipient_type: 'individual',
-      to,
-      type: 'text',
-      text: { body: text },
-    };
-
-    if (replyTo) {
-      payload.context = { message_id: replyTo };
+  public async sendText(to: string, text: string): Promise<boolean> {
+    if (!this.isReady) {
+      console.error('[WhatsApp] Cannot send message - client is not ready');
+      return false;
     }
 
-    return this.sendRequest(payload);
+    try {
+      // whatsapp-web.js expects the phone number format to be "countrycode+number@c.us"
+      // e.g., "27618748005@c.us"
+      const formattedTo = to.includes('@c.us') ? to : `${to.replace(/[^0-9]/g, '')}@c.us`;
+
+      const response = await this.client.sendMessage(formattedTo, text);
+      return !!response.id;
+    } catch (error) {
+      console.error('[WhatsApp] Failed to send message:', error);
+      return false;
+    }
   }
 
   /**
-   * Send interactive button message (max 3 buttons)
+   * Generate product list (simulate interactive product cards for text-only whatsapp-web)
    */
-  async sendButtons({ to, body, buttons, header, footer, replyTo }: ButtonMessage): Promise<boolean> {
-    const interactive: Record<string, unknown> = {
-      type: 'button',
-      body: { text: body },
-      action: {
-        buttons: buttons.slice(0, 3).map((btn) => ({
-          type: 'reply',
-          reply: { id: btn.id, title: btn.title.slice(0, 20) },
-        })),
-      },
-    };
-
-    if (header) {
-      interactive.header = { type: 'text', text: header };
-    }
-    if (footer) {
-      interactive.footer = { text: footer };
-    }
-
-    const payload: Record<string, unknown> = {
-      recipient_type: 'individual',
-      to,
-      type: 'interactive',
-      interactive,
-    };
-
-    if (replyTo) {
-      payload.context = { message_id: replyTo };
-    }
-
-    return this.sendRequest(payload);
-  }
-
-  /**
-   * Send interactive list message (for product catalogs)
-   */
-  async sendList({ to, body, buttonText, sections, header, footer }: ListMessage): Promise<boolean> {
-    const interactive: Record<string, unknown> = {
-      type: 'list',
-      body: { text: body },
-      action: {
-        button: buttonText.slice(0, 20),
-        sections: sections.map((section) => ({
-          title: section.title.slice(0, 24),
-          rows: section.rows.slice(0, 10).map((row) => ({
-            id: row.id,
-            title: row.title.slice(0, 24),
-            description: row.description?.slice(0, 72),
-          })),
-        })),
-      },
-    };
-
-    if (header) {
-      interactive.header = { type: 'text', text: header };
-    }
-    if (footer) {
-      interactive.footer = { text: footer };
-    }
-
-    return this.sendRequest({
-      recipient_type: 'individual',
-      to,
-      type: 'interactive',
-      interactive,
-    });
-  }
-
-  /**
-   * Send product showcase (as formatted text with image links)
-   */
-  async sendProductCards({ to, products, header }: ProductCardMessage): Promise<boolean> {
-    // WhatsApp doesn't have native product cards, so we format nicely
+  public async sendProductOptions(to: string, products: any[], header?: string): Promise<boolean> {
     let text = header ? `*${header}*\n\n` : '';
 
     products.forEach((product, index) => {
       text += `${index + 1}. *${product.name}*\n`;
       text += `   💰 R${product.price.toLocaleString()}\n`;
-      text += `   📦 SKU: ${product.sku}\n`;
-      if (product.image) {
-        text += `   🖼️ ${product.image}\n`;
-      }
+      if (product.brand) text += `   🏢 Brand: ${product.brand}\n`;
       text += '\n';
     });
 
-    text += '_Reply with the number to add to your quote_';
-
-    // Also send buttons for quick selection (first 3 products)
-    if (products.length > 0) {
-      const buttons = products.slice(0, 3).map((p, i) => ({
-        id: `add_${p.id}`,
-        title: `Add ${i + 1}`,
-      }));
-
-      await this.sendText({ to, text });
-      return this.sendButtons({
-        to,
-        body: 'Quick add to quote:',
-        buttons,
-        footer: 'Tap to add product',
-      });
-    }
-
-    return this.sendText({ to, text });
-  }
-
-  /**
-   * Send quote summary
-   */
-  async sendQuoteSummary(
-    to: string,
-    items: Array<{ name: string; quantity: number; unit_price: number }>,
-    quoteId?: string
-  ): Promise<boolean> {
-    let text = '🛒 *Your Quote Summary*\n\n';
-    let total = 0;
-
-    items.forEach((item, index) => {
-      const lineTotal = item.quantity * item.unit_price;
-      total += lineTotal;
-      text += `${index + 1}. ${item.name}\n`;
-      text += `   ${item.quantity}x @ R${item.unit_price.toLocaleString()} = R${lineTotal.toLocaleString()}\n\n`;
-    });
-
-    text += `━━━━━━━━━━━━━━━━━\n`;
-    text += `*Total: R${total.toLocaleString()}*\n`;
-    text += `_(excl. VAT & delivery)_\n\n`;
-
-    if (quoteId) {
-      text += `📋 Quote Ref: ${quoteId}\n\n`;
-    }
-
-    text += `Reply "checkout" to proceed or "clear" to start over`;
-
-    return this.sendText({ to, text });
-  }
-
-  /**
-   * Mark message as read
-   */
-  async markAsRead(messageId: string): Promise<boolean> {
-    return this.sendRequest({
-      status: 'read',
-      message_id: messageId,
-    });
-  }
-
-  /**
-   * Send typing indicator (reaction)
-   */
-  async sendTyping(to: string): Promise<void> {
-    // WhatsApp doesn't have a typing indicator API, but we can use a reaction
-    // For now, we just mark as read quickly
-    console.log(`[WhatsApp] Typing indicator for ${to}`);
+    text += '_Tell me the number to add it to your quote request!_';
+    return this.sendText(to, text);
   }
 }
 

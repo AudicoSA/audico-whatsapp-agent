@@ -6,21 +6,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
   searchProducts,
-  getProductById,
-  addToQuote,
-  clearQuote,
   getRecentMessages,
   saveChatMessage,
-  updateConversation
+  updateConversation,
+  saveQuoteRequest
 } from './supabase';
 import { whatsapp } from './whatsapp';
-import { Conversation, Product } from './types';
+import { Conversation, Product, QuoteRequestDetails } from './types';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-const SYSTEM_PROMPT = `You are the Audico WhatsApp Sales Assistant - a friendly, knowledgeable audio expert helping customers find the perfect audio/visual equipment.
+const SYSTEM_PROMPT = `You are the Audico WhatsApp Discovery Assistant - a friendly, knowledgeable audio expert helping customers find the perfect audio/visual equipment.
 
 ABOUT AUDICO:
 - Premium audio/visual retailer in South Africa
@@ -29,37 +27,38 @@ ABOUT AUDICO:
 - Website: www.audicoonline.co.za
 
 YOUR ROLE:
-1. Help customers find products (speakers, amplifiers, microphones, etc.)
-2. Provide recommendations based on their needs
-3. Build quotes with accurate pricing
-4. Answer product questions
-5. Escalate complex installations to Kenny (the owner)
+1. Help customers find products and guide them toward the right solutions.
+2. DILIGENTLY GATHER REQUIREMENTS for a formal quote.
+3. You do NOT provide final quotes or checkout links. Your goal is to gather all necessary information so Kenny (the owner and installation expert) can prepare a highly accurate, tailored quote.
+4. Escalate complex installations to Kenny.
+
+THE DISCOVERY PROCESS (Gather these details naturally):
+- **Budget**: What is their approximate budget?
+- **Room Size / Area**: How large is the space, or is it commercial/residential?
+- **Use Case**: What is the primary use? (Movies, background music, PA system, etc.)
+- **Specific Brands**: Do they have any brand preferences?
+- **Timeline**: When do they need this installed or delivered?
 
 CONVERSATION STYLE:
 - Keep messages SHORT (WhatsApp format, max 2-3 paragraphs)
 - Use emojis sparingly but naturally 🔊
-- Be helpful but not pushy
-- Ask clarifying questions when needed
-- Always confirm before adding to quote
+- Be helpful and consultative, not pushy.
+- Ask clarifying questions one at a time (don't overwhelm them with a form).
+- Once you have enough information, use the \`submit_quote_request\` tool to finalize the lead.
 
 TOOLS AVAILABLE:
-- search_products: Find products in the catalog
-- add_to_quote: Add a product to customer's quote
-- show_quote: Display current quote summary
-- clear_quote: Remove all items from quote
-- escalate: Transfer to human support
+- search_products: Find products in the catalog to suggest to the user.
+- submit_quote_request: Use this ONLY WHEN you have gathered sufficient requirements to generate a quote request lead for the Audico team.
+- escalate: Transfer to human support (Kenny) without a quote request, if they just need complex advice or have a complaint.
 
 PRICE DISPLAY:
 - Always show prices in Rands (R)
 - Format: R12,500 (not R12500 or 12500)
-- Note: Prices exclude VAT and delivery
+- Explicitly mention: "Please note these are estimated retail prices. The Audico team will send you a formal quote."
 
-WHEN TO ESCALATE:
-- Custom installation requests
-- Technical questions you're unsure about
+WHEN TO ESCALATE DIRECTLY:
 - Complaints or disputes
-- Large commercial projects (>R100,000)
-- Requests for discounts
+- Requests for massive commercial tenders where gathering basic details isn't enough.
 
 Remember: You're having a WhatsApp conversation, not writing an email. Keep it conversational and concise!`;
 
@@ -67,7 +66,6 @@ interface AgentResponse {
   message: string;
   toolsUsed: string[];
   productsShown?: Product[];
-  quoteUpdated?: boolean;
   escalated?: boolean;
 }
 
@@ -77,7 +75,7 @@ interface AgentResponse {
 export async function processMessage(
   conversation: Conversation,
   customerMessage: string,
-  _customerPhone: string
+  customerPhone: string
 ): Promise<AgentResponse> {
   // Get recent conversation history
   const recentMessages = await getRecentMessages(conversation.id, 10);
@@ -91,23 +89,10 @@ export async function processMessage(
     { role: 'user', content: customerMessage },
   ];
 
-  // Build context about current quote
-  let quoteContext = '';
-  if (conversation.context.quote_items.length > 0) {
-    const total = conversation.context.quote_items.reduce(
-      (sum, item) => sum + item.total_price,
-      0
-    );
-    quoteContext = `\n\nCURRENT QUOTE (${conversation.context.quote_items.length} items, total R${total.toLocaleString()}):\n`;
-    conversation.context.quote_items.forEach((item, i) => {
-      quoteContext += `${i + 1}. ${item.product_name} x${item.quantity} @ R${item.unit_price.toLocaleString()}\n`;
-    });
-  }
-
   const tools: Anthropic.Tool[] = [
     {
       name: 'search_products',
-      description: 'Search the Audico product catalog for audio/visual equipment',
+      description: 'Search the Audico product catalog for audio/visual equipment to guide your recommendations',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -136,42 +121,24 @@ export async function processMessage(
       },
     },
     {
-      name: 'add_to_quote',
-      description: 'Add a product to the customer quote. Use the exact product_id from search results.',
+      name: 'submit_quote_request',
+      description: 'Submit an incredibly detailed lead to the Audico sales team so they can build a formal quote. Call this ONLY when you have asked the discovery questions and the user is ready for a quote.',
       input_schema: {
         type: 'object' as const,
         properties: {
-          product_id: {
-            type: 'string',
-            description: 'The UUID of the product (from search results)',
-          },
-          quantity: {
-            type: 'number',
-            description: 'Quantity to add (default 1)',
-          },
+          budget: { type: 'string', description: 'The customer\'s budget (e.g., "R10,000", "Unknown/Flexible")' },
+          room_size: { type: 'string', description: 'Size of the room or venue (e.g., "5x5m living room", "commercial warehouse")' },
+          use_case: { type: 'string', description: 'What they are using the equipment for (e.g., "Home Theater", "Restaurant background music")' },
+          specific_brands: { type: 'string', description: 'Any brands they requested or you recommended' },
+          timeline: { type: 'string', description: 'When they need it (e.g., "ASAP", "Next month")' },
+          additional_notes: { type: 'string', description: 'A detailed summary of exactly what products they are looking for and any other context.' },
         },
-        required: ['product_id'],
-      },
-    },
-    {
-      name: 'show_quote',
-      description: 'Display the current quote summary to the customer',
-      input_schema: {
-        type: 'object' as const,
-        properties: {},
-      },
-    },
-    {
-      name: 'clear_quote',
-      description: 'Clear all items from the quote',
-      input_schema: {
-        type: 'object' as const,
-        properties: {},
+        required: ['budget', 'room_size', 'use_case', 'specific_brands', 'timeline', 'additional_notes'],
       },
     },
     {
       name: 'escalate',
-      description: 'Transfer conversation to human support (Kenny)',
+      description: 'Transfer conversation to human support (Kenny) for complex technical queries or complaints',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -190,14 +157,13 @@ export async function processMessage(
     const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20240620',
       max_tokens: 1024,
-      system: SYSTEM_PROMPT + quoteContext,
+      system: SYSTEM_PROMPT,
       tools,
       messages,
     });
 
     const toolsUsed: string[] = [];
     let productsShown: Product[] = [];
-    let quoteUpdated = false;
     let escalated = false;
     let finalMessage = '';
 
@@ -208,6 +174,7 @@ export async function processMessage(
       } else if (block.type === 'tool_use') {
         const toolResult = await executeToolCall(
           conversation,
+          customerPhone,
           block.name,
           block.input as Record<string, unknown>
         );
@@ -217,16 +184,14 @@ export async function processMessage(
         if (block.name === 'search_products' && toolResult.raw_products) {
           productsShown = toolResult.raw_products as Product[];
         }
-        if (block.name === 'add_to_quote' && toolResult.success) {
-          quoteUpdated = true;
-        }
-        if (block.name === 'escalate') {
+
+        if (block.name === 'submit_quote_request' || block.name === 'escalate') {
           escalated = true;
           await updateConversation(conversation.id, {
-            status: 'escalated',
+            status: block.name === 'submit_quote_request' ? 'pending_quote' : 'escalated',
             context: {
               ...conversation.context,
-              escalation_reason: (block.input as { reason?: string }).reason || 'Customer request',
+              escalation_reason: (block.input as { reason?: string }).reason || 'Quote Request Submitted',
             },
           });
         }
@@ -236,7 +201,7 @@ export async function processMessage(
           const followUp = await anthropic.messages.create({
             model: 'claude-3-5-sonnet-20240620',
             max_tokens: 1024,
-            system: SYSTEM_PROMPT + quoteContext,
+            system: SYSTEM_PROMPT,
             tools,
             messages: [
               ...messages,
@@ -275,7 +240,6 @@ export async function processMessage(
       message: finalMessage,
       toolsUsed,
       productsShown: productsShown.length > 0 ? productsShown : undefined,
-      quoteUpdated,
       escalated,
     };
   } catch (error) {
@@ -296,6 +260,7 @@ export async function processMessage(
  */
 async function executeToolCall(
   conversation: Conversation,
+  customerPhone: string,
   toolName: string,
   input: Record<string, unknown>
 ): Promise<Record<string, unknown>> {
@@ -334,40 +299,22 @@ async function executeToolCall(
       };
     }
 
-    case 'add_to_quote': {
-      const product = await getProductById(input.product_id as string);
-      if (!product) {
-        return { success: false, error: 'Product not found' };
+    case 'submit_quote_request': {
+      const details = input as unknown as QuoteRequestDetails;
+
+      try {
+        await saveQuoteRequest(
+          customerPhone,
+          conversation.customer_name,
+          details
+        );
+        return {
+          success: true,
+          message: "Quote request successfully saved to Audico's CRM. Tell the user that the team has received it and Kenny will reach out to them very soon with a formal quote."
+        };
+      } catch (e: any) {
+        return { success: false, error: e.message };
       }
-
-      const items = await addToQuote(
-        conversation.id,
-        product,
-        (input.quantity as number) || 1
-      );
-
-      return {
-        success: true,
-        message: `Added ${product.product_name} to quote`,
-        quote_items: items.length,
-        quote_total: items.reduce((sum, item) => sum + item.total_price, 0),
-      };
-    }
-
-    case 'show_quote': {
-      return {
-        success: true,
-        items: conversation.context.quote_items,
-        total: conversation.context.quote_items.reduce(
-          (sum, item) => sum + item.total_price,
-          0
-        ),
-      };
-    }
-
-    case 'clear_quote': {
-      await clearQuote(conversation.id);
-      return { success: true, message: 'Quote cleared' };
     }
 
     case 'escalate': {
@@ -393,20 +340,20 @@ export async function sendAgentResponse(
   agentResponse: AgentResponse
 ): Promise<void> {
   // Send main message
-  await whatsapp.sendText({ to: phone, text: agentResponse.message });
+  await whatsapp.sendText(phone, agentResponse.message);
 
   // If products were shown, send as interactive list
   if (agentResponse.productsShown && agentResponse.productsShown.length > 0) {
-    await whatsapp.sendProductCards({
-      to: phone,
-      products: agentResponse.productsShown.map(p => ({
+    await whatsapp.sendProductOptions(
+      phone,
+      agentResponse.productsShown.map(p => ({
         id: p.id,
         name: p.product_name,
         price: p.retail_price,
         sku: p.sku,
-        image: p.images?.[0],
+        brand: p.brand
       })),
-      header: '🔍 Search Results',
-    });
+      '🔍 I found these options:'
+    );
   }
 }
