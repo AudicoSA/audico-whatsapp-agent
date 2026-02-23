@@ -18,8 +18,8 @@ export class WhatsAppClient {
       }),
       // Puppeteer arguments to ensure it runs well on Railway/Linux
       puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        executablePath: process.env.RAILWAY_ENVIRONMENT ? '/usr/bin/chromium' : undefined,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       }
     });
 
