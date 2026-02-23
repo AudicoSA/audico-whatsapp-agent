@@ -52,12 +52,14 @@ export async function POST(request: NextRequest) {
       for (const change of entry.changes) {
         if (change.field !== 'messages') continue;
 
-        const { messages, contacts } = change.value;
-
         // Handle incoming messages
         if (messages && messages.length > 0) {
           for (const message of messages) {
-            await handleIncomingMessage(message, contacts?.[0]?.profile?.name);
+            // FIRE AND FORGET: do not await this on serverless or Railway
+            // this ensures Meta gets a 200 OK immediately and doesn't retry
+            handleIncomingMessage(message, contacts?.[0]?.profile?.name).catch(err => {
+               console.error('[Background Task Error]', err);
+            });
           }
         }
       }
