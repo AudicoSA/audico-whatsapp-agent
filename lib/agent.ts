@@ -29,8 +29,8 @@ ABOUT AUDICO:
 YOUR ROLE:
 1. Help customers find products and guide them toward the right solutions.
 2. DILIGENTLY GATHER REQUIREMENTS for a formal quote.
-3. You do NOT provide final quotes or checkout links. Your goal is to gather all necessary information so Kenny (the owner and installation expert) can prepare a highly accurate, tailored quote.
-4. Escalate complex installations to Kenny.
+3. You do NOT provide final quotes or checkout links. Your goal is to gather all necessary information so the Audico team can prepare a highly accurate, tailored quote.
+4. Escalate complex installations to the Audico team.
 
 THE DISCOVERY PROCESS (Gather these details naturally):
 - **Budget**: What is their approximate budget?
@@ -49,7 +49,7 @@ CONVERSATION STYLE:
 TOOLS AVAILABLE:
 - search_products: Find products in the catalog to suggest to the user.
 - submit_quote_request: Use this ONLY WHEN you have gathered sufficient requirements to generate a quote request lead for the Audico team.
-- escalate: Transfer to human support (Kenny) without a quote request, if they just need complex advice or have a complaint.
+- escalate: Transfer to human support (the Audico team) without a quote request, if they just need complex advice or have a complaint.
 
 PRICE DISPLAY:
 - Always show prices in Rands (R)
@@ -138,7 +138,7 @@ export async function processMessage(
     },
     {
       name: 'escalate',
-      description: 'Transfer conversation to human support (Kenny) for complex technical queries or complaints',
+      description: 'Transfer conversation to human support (the Audico team) for complex technical queries or complaints',
       input_schema: {
         type: 'object' as const,
         properties: {
@@ -155,7 +155,7 @@ export async function processMessage(
   try {
     // Call Claude with tools
     const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-5-sonnet-latest',
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       tools,
@@ -199,7 +199,7 @@ export async function processMessage(
         // If tools were used, we need to continue the conversation
         if (response.stop_reason === 'tool_use') {
           const followUp = await anthropic.messages.create({
-            model: 'claude-3-5-sonnet-20240620',
+            model: 'claude-3-5-sonnet-latest',
             max_tokens: 1024,
             system: SYSTEM_PROMPT,
             tools,
@@ -249,7 +249,7 @@ export async function processMessage(
     await saveChatMessage(conversation.id, 'user', customerMessage);
 
     return {
-      message: "Sorry, I'm having a moment! 😅 Could you try that again? If this keeps happening, type 'help' and I'll connect you with Kenny.",
+      message: "Sorry, I'm having a moment! 😅 Could you try that again? If this keeps happening, type 'help' and I'll connect you with the Audico team.",
       toolsUsed: [],
     };
   }
@@ -310,7 +310,7 @@ async function executeToolCall(
         );
         return {
           success: true,
-          message: "Quote request successfully saved to Audico's CRM. Tell the user that the team has received it and Kenny will reach out to them very soon with a formal quote."
+          message: "Quote request successfully saved to Audico's CRM. Tell the user that the team has received it and the Audico team will reach out to them very soon with a formal quote."
         };
       } catch (e: any) {
         return { success: false, error: e.message };
@@ -318,11 +318,11 @@ async function executeToolCall(
     }
 
     case 'escalate': {
-      // In a real system, this would notify Kenny via Signal/email
+      // In a real system, this would notify the Audico team via Signal/email
       console.log(`[ESCALATION] Reason: ${input.reason}`);
       return {
         success: true,
-        message: 'Escalated to Kenny - he will be in touch shortly',
+        message: 'Escalated to the Audico team - they will be in touch shortly',
         reason: input.reason,
       };
     }
