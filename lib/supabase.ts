@@ -35,15 +35,19 @@ export async function searchProducts(
   } = options;
 
   try {
-    // Use BM25 text search (simpler, works without embeddings)
-    const { data, error } = await supabase.rpc('bm25_product_search', {
-      search_query: query,
+    // Use hybrid text search (passing null for query_embedding)
+    const { data, error } = await supabase.rpc('hybrid_product_search', {
+      query_text: query,
+      query_embedding: null,
       min_price: minPrice,
       max_price: maxPrice,
       brand_filter: brand,
       category_filter: category,
+      use_case_filter: null,
       in_stock_only: inStockOnly,
       result_limit: limit,
+      bm25_weight: 1.0,
+      vector_weight: 0.0,
     });
 
     if (error) {
