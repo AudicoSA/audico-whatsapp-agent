@@ -5,6 +5,9 @@ export class WhatsAppClient {
   public client: Client;
   private isReady: boolean = false;
 
+  public latestQrCode: string | null = null;
+  public isConnected: boolean = false;
+
   constructor() {
     console.log('[WhatsApp] Initializing Web Client...');
 
@@ -28,11 +31,14 @@ export class WhatsAppClient {
       console.log('📱 ACTION REQUIRED: Scan this QR Code with WhatsApp');
       console.log('==================================================\n');
       qrcode.generate(qr, { small: true });
+      this.latestQrCode = qr;
     });
 
     this.client.on('ready', () => {
       console.log('[WhatsApp] ✔️ Client is ready and connected!');
       this.isReady = true;
+      this.isConnected = true;
+      this.latestQrCode = null;
     });
 
     this.client.on('authenticated', () => {

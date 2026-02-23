@@ -1,12 +1,63 @@
 import 'dotenv/config';
+import express from 'express';
+import QRCode from 'qrcode';
 import { whatsapp } from './lib/whatsapp';
-import { getOrCreateConversation, processMessage, sendAgentResponse } from './lib/agent'; // Reusing existing exports through agents
+import { getOrCreateConversation } from './lib/supabase';
+import { processMessage, sendAgentResponse } from './lib/agent';
+
+// Set up Express server for QR Code
+const app = express();
+const port = process.env.PORT || 8080;
+
+app.get('/', async (req, res) => {
+    if (whatsapp.isConnected) {
+        return res.send(`
+            <html><body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                <h1>✅ WhatsApp Agent is Connected!</h1>
+                <p>The bot is actively listening for messages.</p>
+            </body></html>
+        `);
+    }
+
+    if (whatsapp.latestQrCode) {
+        try {
+            const qrImage = await QRCode.toDataURL(whatsapp.latestQrCode);
+            return res.send(`
+                <html><body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+                    <h1>📱 Scan this QR Code to Link WhatsApp</h1>
+                    <img src="${qrImage}" alt="QR Code" style="background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 300px; height: 300px;"/>
+                    <p>Open WhatsApp > Settings > Linked Devices > Link a Device</p>
+                    <script>
+                        // Auto-refresh every 5 seconds until connected
+                        setInterval(() => window.location.reload(), 5000);
+                    </script>
+                </body></html>
+            `);
+        } catch (err) {
+            return res.status(500).send("Error generating QR Code image.");
+        }
+    }
+
+    return res.send(`
+        <html><body style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+            <h1>⏳ Initializing WhatsApp Client...</h1>
+            <p>Please wait a moment and refresh this page.</p>
+            <script>
+                setInterval(() => window.location.reload(), 2000);
+            </script>
+        </body></html>
+    `);
+});
+
+// Start Express server
+app.listen(port, () => {
+    console.log(`[App] Web server listening on port ${port}`);
+});
 
 async function bootstrap() {
     console.log('[App] Starting WhatsApp Discovery Agent...');
 
     // Initialize the whatsapp-web.js client
-    // This will print the QR code to the terminal if not authenticated
     await whatsapp.initialize();
 
     // Listen for incoming messages
@@ -34,7 +85,6 @@ async function bootstrap() {
             const conversation = await getOrCreateConversation(customerPhone, customerName);
 
             // 2. Process message through Claude
-            // Note: We're passing customerPhone as the second argument as per the refactored processMessage signature
             const agentResponse = await processMessage(
                 conversation,
                 text,

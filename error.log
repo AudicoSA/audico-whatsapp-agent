@@ -1,0 +1,129 @@
+[WhatsApp] Initializing Web Client...
+node.exe : node:interna
+l/modules/cjs/loader:14
+21
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (node:internal   
+ /modules/cjs/loade    
+r:1421:String) [],     
+RemoteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+  const err = new 
+Error(message);
+              ^
+
+Error: Cannot find 
+module 
+'@anthropic-ai/sdk'
+Require stack:
+- D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\lib\agent.ts
+- D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\server.ts
+    at node:internal/mo
+dules/cjs/loader:1421:1
+5
+    at 
+nextResolveSimple 
+(D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\node_modules\ts
+x\dist\register-D46fvsV
+_.cjs:4:1004)
+    at 
+D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\node_modules\ts
+x\dist\register-D46fvsV
+_.cjs:3:2630
+    at 
+D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\node_modules\ts
+x\dist\register-D46fvsV
+_.cjs:3:1542
+    at resolveTsPaths 
+(D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\node_modules\ts
+x\dist\register-D46fvsV
+_.cjs:4:760)
+    at 
+D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\node_modules\ts
+x\dist\register-D46fvsV
+_.cjs:4:1102
+    at 
+m._resolveFilename (fil
+e:///D:/AudicoAI/Audico
+%20Management%20Team/wh
+atsapp-agent/node_modul
+es/tsx/dist/register-B7
+jrtLTO.mjs:1:789)
+    at 
+defaultResolveImpl (nod
+e:internal/modules/cjs/
+loader:1059:19)
+    at 
+resolveForCJSWithHooks 
+(node:internal/modules/
+cjs/loader:1064:22)
+    at Module._load (no
+de:internal/modules/cjs
+/loader:1227:37)
+    at TracingChannel.t
+raceSync (node:diagnost
+ics_channel:328:14)
+    at wrapModuleLoad (
+node:internal/modules/c
+js/loader:245:24)
+    at Module.require (
+node:internal/modules/c
+js/loader:1504:12)
+    at require (node:in
+ternal/modules/helpers:
+152:16)
+    at Anthropic 
+(D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\lib\agent.ts:6:
+23)
+    at 
+Object.<anonymous> 
+(D:\AudicoAI\Audico 
+Management Team\whatsap
+p-agent\lib\agent.ts:33
+8:23) {
+  code: 
+'MODULE_NOT_FOUND',
+  requireStack: [
+    
+'D:\\AudicoAI\\Audico 
+Management Team\\whatsa
+pp-agent\\lib\\agent.ts
+',
+    
+'D:\\AudicoAI\\Audico 
+Management Team\\whatsa
+pp-agent\\server.ts'
+  ]
+}
+
+Node.js v24.13.0
