@@ -50,7 +50,7 @@ app.get('/', async (req, res) => {
 });
 
 // Start Express server
-app.listen(port, () => {
+app.listen(port as number, '0.0.0.0', () => {
     console.log(`[App] Web server listening on port ${port}`);
 });
 
