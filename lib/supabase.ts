@@ -147,23 +147,38 @@ export async function updateWhatsappState(state: {
   // We use a special phone number 'system_state' to store the bot's global status
   const systemId = 'system_state';
 
-  const { error } = await supabase
+  // First try to find existing state
+  const { data: existing } = await supabase
     .from('whatsapp_conversations')
-    .upsert(
-      {
-        phone_number: systemId,
-        status: 'active',
-        context: {
-          is_connected: state.is_connected,
-          qr_code: state.qr_code,
-          updated_at: new Date().toISOString()
-        }
-      },
-      { onConflict: 'phone_number' }
-    );
+    .select('id')
+    .eq('phone_number', systemId)
+    .single();
 
-  if (error) {
-    console.error('[Supabase] Failed to update WhatsApp state:', error);
+  const payload = {
+    phone_number: systemId,
+    status: 'active',
+    context: {
+      is_connected: state.is_connected,
+      qr_code: state.qr_code,
+      updated_at: new Date().toISOString()
+    }
+  };
+
+  if (existing) {
+    // Update existing
+    const { error: updateError } = await supabase
+      .from('whatsapp_conversations')
+      .update(payload)
+      .eq('id', existing.id);
+
+    if (updateError) console.error('[Supabase] Failed to update WhatsApp state:', updateError);
+  } else {
+    // Insert new
+    const { error: insertError } = await supabase
+      .from('whatsapp_conversations')
+      .insert(payload);
+
+    if (insertError) console.error('[Supabase] Failed to insert WhatsApp state:', insertError);
   }
 }
 
