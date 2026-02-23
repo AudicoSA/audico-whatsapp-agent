@@ -166,6 +166,7 @@ export async function processMessage(
     let productsShown: Product[] = [];
     let escalated = false;
     let finalMessage = '';
+    const toolResultsData: Anthropic.ToolResultBlockParam[] = [];
 
     // Process response content
     for (const block of response.content) {
@@ -196,34 +197,34 @@ export async function processMessage(
           });
         }
 
-        if (response.stop_reason === 'tool_use') {
-          const followUp = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 1024,
-            system: SYSTEM_PROMPT,
-            tools,
-            messages: [
-              ...messages,
-              { role: 'assistant', content: response.content },
-              {
-                role: 'user',
-                content: [
-                  {
-                    type: 'tool_result',
-                    tool_use_id: block.id,
-                    content: JSON.stringify(toolResult),
-                  },
-                ],
-              },
-            ],
-          });
+        toolResultsData.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
+    }
 
-          // Get final text response
-          for (const followBlock of followUp.content) {
-            if (followBlock.type === 'text') {
-              finalMessage = followBlock.text;
-            }
-          }
+    if (response.stop_reason === 'tool_use' && toolResultsData.length > 0) {
+      const followUp = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: SYSTEM_PROMPT,
+        tools,
+        messages: [
+          ...messages,
+          { role: 'assistant', content: response.content },
+          {
+            role: 'user',
+            content: toolResultsData,
+          },
+        ],
+      });
+
+      // Get final text response
+      for (const followBlock of followUp.content) {
+        if (followBlock.type === 'text') {
+          finalMessage = followBlock.text;
         }
       }
     }

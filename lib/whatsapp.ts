@@ -88,8 +88,10 @@ export class WhatsAppClient {
 
     try {
       // whatsapp-web.js expects the phone number format to be "countrycode+number@c.us"
-      // e.g., "27618748005@c.us"
-      const formattedTo = to.includes('@c.us') ? to : `${to.replace(/[^0-9]/g, '')}@c.us`;
+      // e.g., "27618748005@c.us", but recent Meta changes also pass "@lid" for linked IDs.
+      const formattedTo = to.includes('@c.us') || to.includes('@lid') || to.includes('@g.us')
+        ? to
+        : `${to.replace(/[^0-9]/g, '')}@c.us`;
 
       const response = await this.client.sendMessage(formattedTo, text);
       return !!response.id;
