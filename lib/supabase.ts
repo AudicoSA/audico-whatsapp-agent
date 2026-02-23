@@ -138,6 +138,36 @@ export async function getOrCreateConversation(
 }
 
 /**
+ * Update global WhatsApp connection state (for the dashboard)
+ */
+export async function updateWhatsappState(state: {
+  is_connected: boolean;
+  qr_code: string | null;
+}): Promise<void> {
+  // We use a special phone number 'system_state' to store the bot's global status
+  const systemId = 'system_state';
+
+  const { error } = await supabase
+    .from('whatsapp_conversations')
+    .upsert(
+      {
+        phone_number: systemId,
+        status: 'active',
+        context: {
+          is_connected: state.is_connected,
+          qr_code: state.qr_code,
+          updated_at: new Date().toISOString()
+        }
+      },
+      { onConflict: 'phone_number' }
+    );
+
+  if (error) {
+    console.error('[Supabase] Failed to update WhatsApp state:', error);
+  }
+}
+
+/**
  * Update conversation context
  */
 export async function updateConversation(

@@ -1,5 +1,6 @@
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
+import { updateWhatsappState } from './supabase';
 
 export class WhatsAppClient {
   public client: Client;
@@ -27,19 +28,24 @@ export class WhatsAppClient {
   }
 
   private setupListeners() {
-    this.client.on('qr', (qr) => {
+    this.client.on('qr', async (qr) => {
       console.log('\n==================================================');
       console.log('📱 ACTION REQUIRED: Scan this QR Code with WhatsApp');
       console.log('==================================================\n');
       qrcode.generate(qr, { small: true });
       this.latestQrCode = qr;
+
+      // Push QR code to Supabase so we can read it elsewhere (e.g. locally or dashboard)
+      await updateWhatsappState({ is_connected: false, qr_code: qr });
     });
 
-    this.client.on('ready', () => {
+    this.client.on('ready', async () => {
       console.log('[WhatsApp] ✔️ Client is ready and connected!');
       this.isReady = true;
       this.isConnected = true;
       this.latestQrCode = null;
+
+      await updateWhatsappState({ is_connected: true, qr_code: null });
     });
 
     this.client.on('authenticated', () => {
@@ -50,9 +56,12 @@ export class WhatsAppClient {
       console.error('[WhatsApp] ❌ Authentication failed:', msg);
     });
 
-    this.client.on('disconnected', (reason) => {
+    this.client.on('disconnected', async (reason) => {
       console.log('[WhatsApp] ⚠️ Client was disconnected:', reason);
       this.isReady = false;
+      this.isConnected = false;
+
+      await updateWhatsappState({ is_connected: false, qr_code: null });
     });
   }
 
