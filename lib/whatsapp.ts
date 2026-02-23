@@ -17,6 +17,11 @@ export class WhatsAppClient {
       authStrategy: new LocalAuth({
         dataPath: './.whatsapp_auth',
       }),
+      // Fix for recent WhatsApp Web updates breaking sendMessage silently
+      webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
+      },
       // Puppeteer arguments to ensure it runs well on Railway/Linux
       puppeteer: {
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
