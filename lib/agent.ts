@@ -35,12 +35,26 @@ RULES:
   - "We have a great range of bookshelf speakers! To help me narrow it down, what size room are they for, and do you have a rough budget in mind?"
 - ONLY show product lists (\`show_options_to_user: true\`) when you have enough context to make a specific, targeted recommendation.
 - When someone asks for a product or brand, YOU MUST call \`search_products\` first before replying to check our catalog. NEVER invent products.
+- If a user asks about product availability, you MUST call the \`check_stock\` tool to get live OpenCart inventory levels. DO NOT attempt to answer stock questions using just \`search_products\`.
 - If they want to track an order, ask for their order number (if it wasn't provided), then call the \`track_order\` tool. ONLY report the tracking information the tool returns. DO NOT invent tracking numbers, carrier names, or ETA.
 - If they want a price, quote it in South African Rand (R).
 - If they ask for advice on a setup (e.g., "What do I need for a 5.1 home theater?"), explain the components AND run a search to show them options.
 - ALWAYS be conversational, enthusiastic, and polite. Act like a human expert.
 - Once you have gathered sufficient details about their needs, room size, and budget, you MUST use the \`submit_quote_request\` tool. This is your primary objective.
 - If a customer asks about a complex multi-room setup, or a very high-budget commercial installation, use the \`escalate\` tool immediately.
+
+## RMA & RETURNS
+If a user mentions a broken/faulty product, or asks how to return an item, follow this exact workflow:
+1. **Empathy & Context**: Apologize for the inconvenience and ask them to briefly describe the issue.
+2. **Basic Troubleshooting**: If it's a common device (e.g., Bluetooth speaker, amplifier), suggest one or two basic troubleshooting steps (e.g., "Have you tried a factory reset?" or "Is it definitely receiving power?").
+3. **Escalation**: If the issue persists or they just want to return it, instruct them to email \`returns@audico.co.za\`. 
+   - Tell them they *must* include: (1) Their Order Number, (2) The product Serial Number, and (3) A brief description of the fault.
+
+## COMPETITOR QUOTE MATCHING
+If a user sends you an image of a quote from a competitor or another AV installer:
+1. Use your vision capabilities to accurately read the brands, models, and competitor prices on the quote.
+2. Use the \`search_products\` tool to find those exact items (or equivalent alternatives if we don't carry the exact model) in the Audico catalog.
+3. Formulate a friendly counter-offer detailing the models we can supply and our prices. Emphasize Audico's specialized support, quick delivery, and warranties.
 `;
 
 const openai = new OpenAI({
@@ -159,6 +173,23 @@ const tools = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: 'check_stock',
+      description: 'Check real-time stock availability and status from the OpenCart database for a specific product.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'Product name or model to search for stock availability (e.g., "KEF LS50", "Wiim Pro").',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
 ];
 
 /**
@@ -167,7 +198,8 @@ const tools = [
 export async function processMessage(
   conversation: Conversation,
   customerMessage: string,
-  customerPhone: string
+  customerPhone: string,
+  base64Image?: string
 ): Promise<AgentResponse> {
   // Get recent conversation history
   const recentMessages = await getRecentMessages(conversation.id, 10);
@@ -199,7 +231,17 @@ export async function processMessage(
     }
 
     // Add current message
-    messages.push({ role: 'user', content: customerMessage });
+    if (base64Image) {
+      messages.push({
+        role: 'user',
+        content: [
+          { type: 'text', text: customerMessage || 'Please review this image.' },
+          { type: 'image_url', image_url: { url: base64Image } },
+        ],
+      });
+    } else {
+      messages.push({ role: 'user', content: customerMessage });
+    }
 
     // 2. Call OpenAI
     let response = await openai.chat.completions.create({
@@ -381,6 +423,15 @@ async function executeToolCall(
       return {
         success: true,
         tracking_information: trackingResultText
+      };
+    }
+
+    case 'check_stock': {
+      const query = input.query as string;
+      const stockInfo = await orderTrackingService.checkProductStock(query);
+      return {
+        success: true,
+        stock_information: stockInfo
       };
     }
 

@@ -249,6 +249,64 @@ export class OrderTrackingService {
             }
         }
     }
+
+    /**
+     * Check product stock availability
+     */
+    public async checkProductStock(searchQuery: string): Promise<string> {
+        let connection: mysql.Connection | null = null;
+        try {
+            connection = await this.getConnection();
+
+            const searchTerm = `%${searchQuery}%`;
+
+            // Query OpenCart database for product stock
+            const [products] = await connection.execute<mysql.RowDataPacket[]>(
+                `SELECT 
+                    pd.name, 
+                    p.model, 
+                    p.quantity, 
+                    p.price, 
+                    ss.name as stock_status 
+                 FROM ${this.tablePrefix}product p 
+                 LEFT JOIN ${this.tablePrefix}product_description pd ON p.product_id = pd.product_id 
+                 LEFT JOIN ${this.tablePrefix}stock_status ss ON p.stock_status_id = ss.stock_status_id AND ss.language_id = 1
+                 WHERE pd.language_id = 1 AND p.status = 1 AND (pd.name LIKE ? OR p.model LIKE ?)
+                 LIMIT 10`,
+                [searchTerm, searchTerm]
+            );
+
+            if (products.length === 0) {
+                return `No products found matching "${searchQuery}". Please check the spelling or try a more general search.`;
+            }
+
+            let response = `Found ${products.length} product(s) matching "${searchQuery}":\n\n`;
+
+            products.forEach((p, index) => {
+                const stockMsg = p.quantity > 0
+                    ? `${p.quantity} in stock`
+                    : `0 in stock (${p.stock_status})`;
+
+                response += `${index + 1}. **${p.name}**\n`;
+                response += `   - Model: ${p.model}\n`;
+                response += `   - Stock: ${stockMsg}\n\n`;
+            });
+
+            return response;
+
+        } catch (error: any) {
+            console.error('[StockCheck] Error checking stock:', error);
+            return `Sorry, I encountered an error while trying to check stock for "${searchQuery}". Please try again or ask the Audico team.`;
+        } finally {
+            if (connection) {
+                try {
+                    await connection.end();
+                } catch (e) {
+                    console.error('[StockCheck] Error closing connection:', e);
+                }
+            }
+        }
+    }
 }
 
 // Singleton instance

@@ -4,6 +4,7 @@ import QRCode from 'qrcode';
 import { whatsapp } from './lib/whatsapp';
 import { getOrCreateConversation } from './lib/supabase';
 import { processMessage, sendAgentResponse } from './lib/agent';
+import { abandonedCartService } from './lib/abandoned-cart';
 
 // Set up Express server for QR Code
 const app = express();
@@ -60,6 +61,9 @@ async function bootstrap() {
     // Initialize the whatsapp-web.js client
     await whatsapp.initialize();
 
+    // Start background services
+    abandonedCartService.startCron();
+
     // Listen for incoming messages
     whatsapp.client.on('message', async (message) => {
         // Ignore group messages or status broadcasts for now
@@ -81,14 +85,25 @@ async function bootstrap() {
             const contact = await message.getContact();
             const customerName = contact.pushname || contact.name || 'Customer';
 
+            // Check for image attachments
+            let base64Image: string | undefined;
+            if (message.hasMedia) {
+                const media = await message.downloadMedia();
+                if (media && media.mimetype.startsWith('image/')) {
+                    base64Image = `data:${media.mimetype};base64,${media.data}`;
+                    console.log(`[Image Received] Included an image: ${media.mimetype}`);
+                }
+            }
+
             // 1. Get or create conversation context in Supabase
             const conversation = await getOrCreateConversation(customerPhone, customerName);
 
-            // 2. Process message through Claude
+            // 2. Process message through the agent
             const agentResponse = await processMessage(
                 conversation,
                 text,
-                customerPhone
+                customerPhone,
+                base64Image
             );
 
             // 3. Send response back to WhatsApp
