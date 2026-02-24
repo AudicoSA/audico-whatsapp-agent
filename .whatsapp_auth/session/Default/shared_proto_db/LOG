@@ -1,2 +1,3 @@
-2026/02/23-13:25:18.444 835c Creating DB D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\shared_proto_db since it was missing.
-2026/02/23-13:25:18.603 835c Reusing MANIFEST D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\shared_proto_db/MANIFEST-000001
+2026/02/24-05:04:19.479 753c Reusing MANIFEST D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\shared_proto_db/MANIFEST-000001
+2026/02/24-05:04:19.526 753c Recovering log #3
+2026/02/24-05:04:19.528 753c Reusing old log D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\shared_proto_db/000003.log 

@@ -1,2 +1,3 @@
-2026/02/23-13:25:18.511 201c8 Creating DB D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\Local Storage\leveldb since it was missing.
-2026/02/23-13:25:18.680 201c8 Reusing MANIFEST D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2026/02/24-05:04:18.717 3884 Reusing MANIFEST D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\Local Storage\leveldb/MANIFEST-000001
+2026/02/24-05:04:18.790 3884 Recovering log #3
+2026/02/24-05:04:18.808 3884 Reusing old log D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\Local Storage\leveldb/000003.log 

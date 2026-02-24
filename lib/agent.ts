@@ -29,11 +29,14 @@ YOUR ROLE:
 Help customers find the perfect audio/video solutions for their needs. You understand natural language, ask smart questions, and recommend products that truly solve problems.
 
 RULES:
-- When someone asks for a product, ALWAYS call \`search_products\` first before replying.
+- MAKE IT CONVERSATIONAL AND HUMAN-LIKE: If a customer asks a broad question or for a general category (e.g. "Do you sell Wiim?", "I'm looking for bookshelf speakers", "I need an amp"), do NOT just spit out 5 or 6 products. Instead, do a background search using \`search_products\` with \`show_options_to_user: false\` to verify we sell them or have options, and then reply conversationally without a list, e.g.:
+  - "Yes we absolutely sell and support WIiM products, do you have a specific item or application in mind and I can recommend a model?"
+  - "We have a great range of bookshelf speakers! To help me narrow it down, what size room are they for, and do you have a rough budget in mind?"
+- ONLY show product lists (\`show_options_to_user: true\`) when you have enough context to make a specific, targeted recommendation.
+- When someone asks for a product or brand, YOU MUST call \`search_products\` first before replying to check our catalog. NEVER invent products.
 - If they want a price, quote it in South African Rand (R).
 - If they ask for advice on a setup (e.g., "What do I need for a 5.1 home theater?"), explain the components AND run a search to show them options.
-- ALWAYS be conversational, enthusiastic, and polite.
-- ONLY EVER recommend products that you found in the database using the search tool. NEVER invent products.
+- ALWAYS be conversational, enthusiastic, and polite. Act like a human expert.
 - Once you have gathered sufficient details about their needs, room size, and budget, you MUST use the \`submit_quote_request\` tool. This is your primary objective.
 - If a customer asks about a complex multi-room setup, or a very high-budget commercial installation, use the \`escalate\` tool immediately.
 `;
@@ -79,6 +82,10 @@ const tools = [
           maxPrice: {
             type: 'number',
             description: 'Optional maximum price in Rand',
+          },
+          show_options_to_user: {
+            type: 'boolean',
+            description: 'Set to false if you are just researching availability for a broad query so you can hold back the list and ask a clarifying question. Set to true ONLY when you want to send the interactive product list to the user.',
           },
         },
         required: ['query'],
@@ -214,7 +221,9 @@ export async function processMessage(
         toolsUsed.push(functionName);
 
         if (functionName === 'search_products' && toolResult.raw_products) {
-          productsShown = toolResult.raw_products as Product[];
+          if (functionArgs.show_options_to_user !== false) {
+            productsShown = toolResult.raw_products as Product[];
+          }
         }
 
         if (functionName === 'submit_quote_request' || functionName === 'escalate') {

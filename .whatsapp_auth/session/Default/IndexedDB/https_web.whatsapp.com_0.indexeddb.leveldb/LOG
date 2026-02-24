@@ -1,2 +1,12 @@
-2026/02/23-13:25:22.255 1ebf0 Creating DB D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb since it was missing.
-2026/02/23-13:25:22.301 1ebf0 Reusing MANIFEST D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/02/24-05:04:34.823 2530 Reusing MANIFEST D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/02/24-05:04:34.904 2530 Recovering log #28
+2026/02/24-05:04:35.064 2530 Reusing old log D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000028.log 
+2026/02/24-05:04:43.722 6ce0 Level-0 table #33: started
+2026/02/24-05:04:43.899 6ce0 Level-0 table #33: 1164160 bytes OK
+2026/02/24-05:04:43.936 6ce0 Delete type=0 #28
+2026/02/24-05:04:44.238 6ce0 Compacting 1@1 + 1@2 files
+2026/02/24-05:04:44.515 6ce0 Generated table #34@1: 35364 keys, 1329658 bytes
+2026/02/24-05:04:44.521 6ce0 Compacted 1@1 + 1@2 files => 1329658 bytes
+2026/02/24-05:04:44.527 6ce0 compacted to: files[ 0 0 1 0 0 0 0 ]
+2026/02/24-05:04:44.529 6ce0 Delete type=2 #30
+2026/02/24-05:04:44.530 6ce0 Delete type=2 #33

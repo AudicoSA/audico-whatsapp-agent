@@ -1,2 +1,3 @@
-2026/02/23-13:25:27.833 17c78 Creating DB D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\GCM Store since it was missing.
-2026/02/23-13:25:27.902 17c78 Reusing MANIFEST D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\GCM Store/MANIFEST-000001
+2026/02/24-05:04:25.264 6edc Reusing MANIFEST D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\GCM Store/MANIFEST-000001
+2026/02/24-05:04:25.305 6edc Recovering log #3
+2026/02/24-05:04:25.306 6edc Reusing old log D:\AudicoAI\Audico Management Team\whatsapp-agent\.whatsapp_auth\session\Default\GCM Store/000003.log 
