@@ -6,10 +6,9 @@ import axios from 'axios';
  * Connects to OpenCart database and Ship Logic API for real-time order tracking
  */
 export class OrderTrackingService {
-    private dbConfig: mysql.PoolOptions;
+    private dbConfig: mysql.ConnectionOptions;
     private tablePrefix: string;
     private shipLogicApiKey: string;
-    private pool: mysql.Pool | null = null;
 
     constructor() {
         // OpenCart database connection config
@@ -19,8 +18,7 @@ export class OrderTrackingService {
             user: process.env.OPENCART_DB_USER,
             password: process.env.OPENCART_DB_PASSWORD,
             database: process.env.OPENCART_DB_NAME,
-            waitForConnections: true,
-            connectionLimit: 5,
+            connectTimeout: 5000,
         };
 
         this.tablePrefix = process.env.OPENCART_TABLE_PREFIX || 'oc_';
@@ -28,13 +26,15 @@ export class OrderTrackingService {
     }
 
     /**
-     * Get database connection pool
+     * Get database connection
      */
-    private getPool(): mysql.Pool {
-        if (!this.pool) {
-            this.pool = mysql.createPool(this.dbConfig);
+    private async getConnection(): Promise<mysql.Connection> {
+        try {
+            return await mysql.createConnection(this.dbConfig);
+        } catch (error: any) {
+            console.error('[OrderTracking] Database connection error:', error.message);
+            throw new Error('Unable to connect to order database. Check your OPENCART_DB_ environment variables.');
         }
-        return this.pool;
     }
 
     /**
@@ -133,11 +133,12 @@ export class OrderTrackingService {
      * Track order by order number
      */
     public async trackOrderFormatted(orderNumber: string): Promise<string> {
+        let connection: mysql.Connection | null = null;
         try {
-            const pool = this.getPool();
+            connection = await this.getConnection();
 
             // Query OpenCart database for order
-            const [orders] = await pool.execute<mysql.RowDataPacket[]>(
+            const [orders] = await connection.execute<mysql.RowDataPacket[]>(
                 `SELECT 
           o.order_id, 
           o.invoice_no, 
@@ -171,20 +172,20 @@ export class OrderTrackingService {
             const order = orders[0];
 
             // Get order products
-            const [products] = await pool.execute<mysql.RowDataPacket[]>(
+            const [products] = await connection.execute<mysql.RowDataPacket[]>(
                 `SELECT
-                name,
+                    name,
                     model,
                     quantity,
                     price,
                     total 
-        FROM ${this.tablePrefix} order_product 
-        WHERE order_id = ? `,
+                 FROM ${this.tablePrefix}order_product 
+                 WHERE order_id = ?`,
                 [order.order_id]
             );
 
             // Get order history (status changes)
-            const [history] = await pool.execute<mysql.RowDataPacket[]>(
+            const [history] = await connection.execute<mysql.RowDataPacket[]>(
                 `SELECT
                 oh.date_added,
                     os.name as status,
@@ -238,6 +239,14 @@ export class OrderTrackingService {
         } catch (error: any) {
             console.error('[OrderTracking] Error tracking order:', error);
             return `Sorry, I encountered an error while trying to fetch the tracking information for order ${orderNumber}. This might be due to a temporary database connection issue. Please try again later or ask to be connected to the Audico team.`;
+        } finally {
+            if (connection) {
+                try {
+                    await connection.end();
+                } catch (e) {
+                    console.error('[OrderTracking] Error closing connection:', e);
+                }
+            }
         }
     }
 }
