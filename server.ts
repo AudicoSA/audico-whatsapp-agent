@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import QRCode from 'qrcode';
+const pdfParse = require('pdf-parse');
 import { whatsapp } from './lib/whatsapp';
 import { getOrCreateConversation } from './lib/supabase';
 import { processMessage, sendAgentResponse } from './lib/agent';
@@ -73,7 +74,7 @@ async function bootstrap() {
 
         try {
             const customerPhone = message.from;
-            const text = message.body;
+            let text = message.body;
 
             console.log(`\n[Message Received] From: ${customerPhone} | Text: ${text}`);
 
@@ -89,9 +90,24 @@ async function bootstrap() {
             let base64Image: string | undefined;
             if (message.hasMedia) {
                 const media = await message.downloadMedia();
-                if (media && media.mimetype.startsWith('image/')) {
-                    base64Image = `data:${media.mimetype};base64,${media.data}`;
-                    console.log(`[Image Received] Included an image: ${media.mimetype}`);
+                if (media) {
+                    if (media.mimetype.startsWith('image/')) {
+                        base64Image = `data:${media.mimetype};base64,${media.data}`;
+                        console.log(`[Image Received] Included an image: ${media.mimetype}`);
+                    } else if (media.mimetype === 'application/pdf') {
+                        try {
+                            const buffer = Buffer.from(media.data, 'base64');
+                            const pdfData = await pdfParse(buffer);
+                            if (pdfData.text) {
+                                text = text + `\n\n[USER UPLOADED A PDF DOCUMENT. EXTRACTED TEXT:]\n${pdfData.text}\n[END OF PDF DOCUMENT]`;
+                                console.log(`[PDF Received] Extracted ${pdfData.text.length} characters of text.`);
+                            }
+                        } catch (err) {
+                            console.error('[PDF Parse Error]', err);
+                        }
+                    } else {
+                        console.log(`[Media Received] Unsupported media type: ${media.mimetype}`);
+                    }
                 }
             }
 
