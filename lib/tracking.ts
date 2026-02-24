@@ -236,7 +236,7 @@ export class OrderTrackingService {
 
             return this.formatOrderInfo(orderInfo);
         } catch (error: any) {
-            console.error('[OrderTracking] Error tracking order:', error.message);
+            console.error('[OrderTracking] Error tracking order:', error);
             return `Sorry, I encountered an error while trying to fetch the tracking information for order ${orderNumber}. This might be due to a temporary database connection issue. Please try again later or ask to be connected to the Audico team.`;
         }
     }
