@@ -94,7 +94,7 @@ async function bootstrap() {
                     if (media.mimetype.startsWith('image/')) {
                         base64Image = `data:${media.mimetype};base64,${media.data}`;
                         console.log(`[Image Received] Included an image: ${media.mimetype}`);
-                    } else if (media.mimetype === 'application/pdf') {
+                    } else if (media.mimetype.includes('pdf')) {
                         try {
                             const buffer = Buffer.from(media.data, 'base64');
                             const pdfData = await pdfParse(buffer);
