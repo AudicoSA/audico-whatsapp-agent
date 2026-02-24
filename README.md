@@ -1,22 +1,21 @@
 # Audico WhatsApp Agent
 
-AI-powered WhatsApp sales assistant for Audico Online. Helps customers find products, build quotes, and get recommendations.
+AI-powered WhatsApp sales assistant for Audico Online. Helps customers find products, build quotes, and get recommendations autonomously using OpenAI's `gpt-4o-mini` and `whatsapp-web.js`.
 
 ## Features
 
-- **AI-Powered Conversations** - Uses Claude Sonnet for natural language understanding
-- **Product Search** - Searches Audico's 10,000+ product catalog
-- **Quote Builder** - Helps customers build quotes with accurate pricing
-- **WhatsApp Native** - Interactive buttons, lists, and rich messages
-- **Conversation Memory** - Maintains context across messages
-- **Human Escalation** - Seamlessly transfers to Kenny when needed
+- **OpenAI Native Brain** - Uses the proven `AUDICO-CHAT-QUOTE-X` master prompt and 10 recursive tools.
+- **Product Search** - Searches Audico's 10,000+ product catalog using Supabase hybrid search.
+- **Quote Builder** - Asks clarifying questions and automatically pushes formal leads into the CRM.
+- **Independent WhatsApp Web** - Runs independently using Puppeteer, completely bypassing Meta's strict 24-hour business rules.
+- **Human Escalation** - Seamlessly pauses chat logic when requested so Kenny can take over.
 
 ## Architecture
 
 ```
 ┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
-│   WhatsApp      │─────▶│   Vercel API    │─────▶│   Claude AI     │
-│   (Customer)    │◀─────│   /api/webhook  │◀─────│   (Sonnet)      │
+│   WhatsApp      │─────▶│   Railway.app   │─────▶│   OpenAI        │
+│   (Customer)    │◀─────│   server.ts     │◀─────│   gpt-4o-mini   │
 └─────────────────┘      └─────────────────┘      └─────────────────┘
                                 │
                                 ▼
@@ -27,153 +26,77 @@ AI-powered WhatsApp sales assistant for Audico Online. Helps customers find prod
                          └─────────────────┘
 ```
 
-## Setup
+## Setup & Deployment
 
 ### 1. Prerequisites
-
-- Node.js 18+
-- Meta Business Account with WhatsApp API access
+- Node.js 18+ (for local development)
 - Supabase project (same as main Audico system)
-- Anthropic API key
+- OpenAI API key
+- A smartphone with the target WhatsApp number installed
 
 ### 2. Environment Variables
 
-Copy `.env.example` to `.env.local` and fill in:
+Create a `.env` file locally, and also copy these into your **Railway Dashboard > Variables**:
 
 ```bash
-# WhatsApp Cloud API (Meta Business)
-WHATSAPP_PHONE_NUMBER_ID=123456789012345
-WHATSAPP_ACCESS_TOKEN=EAAG...
-WHATSAPP_VERIFY_TOKEN=your_random_string
-WHATSAPP_BUSINESS_ACCOUNT_ID=123456789
-
-# AI
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Supabase (same as main Audico system)
+OPENAI_API_KEY=sk-proj-...
 SUPABASE_URL=https://ajdehycoypilsegmxbto.supabase.co
 SUPABASE_SERVICE_KEY=eyJhbGc...
 ```
 
-### 3. Database Setup
+### 3. Deploy to Railway
 
-Run the migration in Supabase SQL Editor (see `supabase/migrations/001_whatsapp_tables.sql`).
+This bot is designed to run 24/7 on [Railway.app](https://railway.app):
+1. Connect this GitHub repository to a new Railway project.
+2. Railway will automatically build the `Dockerfile` provided in the repo (which includes the necessary Chromium libraries for Puppeteer).
+3. The server starts via `npx tsx server.ts`.
 
-This creates `whatsapp_conversations` and `whatsapp_messages` tables.
+### 4. Authenticate the Bot (QR Code)
 
-### 4. Deploy to Vercel
+Since this uses `whatsapp-web.js`, the cloud server must link to your WhatsApp account just like WhatsApp Web.
 
-```bash
-npm install
-vercel
-```
+1. Once Railway says the deployment is live, open a terminal locally.
+2. Run `npx tsx fetch-qr.ts`.
+3. Wait ~30 seconds. When Railway boots up, it renders the QR code and pushes it to Supabase.
+4. `fetch-qr.ts` will print the QR code cleanly in your terminal.
+5. Open WhatsApp on your phone > **Settings** > **Linked Devices** > **Link a Device**.
+6. Scan the terminal. The bot is now permanently connected in the cloud!
 
-### 5. Configure WhatsApp Webhook
+*(Note: To keep the session alive across server restarts, add a persistent Volume to the Railway container mapped to `/app/.whatsapp_auth`)*.
 
-1. Go to [Meta for Developers](https://developers.facebook.com)
-2. Open your WhatsApp Business App
-3. Go to **WhatsApp > Configuration**
-4. Set webhook URL: `https://your-vercel-url.vercel.app/api/webhook`
-5. Set verify token: same as `WHATSAPP_VERIFY_TOKEN`
-6. Subscribe to: `messages`
+---
 
-## WhatsApp Number
-
-Verified number: **+27 61 874 8005** (Audico Support)
-
-## Usage
-
-### Customer Commands
-
-| Command | Description |
-|---------|-------------|
-| `hi` / `hello` | Start conversation |
-| `help` | Show help menu |
-| `search [query]` | Search products |
-| `add [product]` | Add to quote |
-| `show quote` | View current quote |
-| `clear quote` | Clear quote |
-| `talk to kenny` | Escalate to human |
-
-### Example Conversation
-
-```
-Customer: Hi!
-Bot: Hi there! 👋 Welcome to Audico...
-
-Customer: I need speakers for my restaurant
-Bot: Great! For restaurant background music, I'd recommend...
-[Shows ceiling speaker options]
-
-Customer: Add the JBL CSS-15
-Bot: ✅ Added JBL Control CSS-15 to your quote...
-
-Customer: Show my quote
-Bot: 🛒 Your Quote Summary...
-```
-
-## Development
-
-```bash
-# Install dependencies
-npm install
-
-# Run locally (with ngrok for webhook testing)
-npm run dev
-ngrok http 3000
-
-# Update webhook URL in Meta console to ngrok URL
-```
-
-## Files
+## File Structure
 
 ```
 whatsapp-agent/
-├── app/
-│   ├── api/
-│   │   ├── health/route.ts    # Health check
-│   │   └── webhook/route.ts   # WhatsApp webhook
-│   ├── layout.tsx
-│   └── page.tsx
+├── server.ts                     # Main Express server and WhatsApp Client Init
+├── fetch-qr.ts                   # Local helper to pull Railway's live QR code
 ├── lib/
-│   ├── agent.ts               # AI conversation agent
-│   ├── supabase.ts            # Database & product search
-│   ├── types.ts               # TypeScript types
-│   └── whatsapp.ts            # WhatsApp API client
+│   ├── agent.ts                  # OpenAI agent with 10 complex AV tools
+│   ├── whatsapp.ts               # whatsapp-web.js Puppeteer wrapper
+│   ├── supabase.ts               # Product search & DB operations
+│   └── types.ts                  # TypeScript types
 ├── supabase/
 │   └── migrations/
-│       └── 001_whatsapp_tables.sql
-├── .env.example
-├── package.json
-├── README.md
-├── tsconfig.json
-└── vercel.json
+│       └── 001_whatsapp_tables.sql  # DB schema
+├── Dockerfile                    # Chrome Linux runtime for Railway
+├── .env                          # Local env vars (not in git)
+└── package.json                  # Dependencies
 ```
 
-## Monitoring
+## Troubleshooting
 
-- Health check: `GET /api/health`
-- Vercel logs: `vercel logs`
-- Conversation history: Query `whatsapp_conversations` in Supabase
-
-## Escalation
-
-When the agent escalates to Kenny:
-1. Conversation status changes to `escalated`
-2. Context includes escalation reason
-3. (TODO) Send notification to Kenny via Signal/email
+- **QR Code isn't generating?** Ensure the Railway server isn't OOM (Out of Memory). Puppeteer requires at least 512MB RAM.
+- **Messages aren't sending silently?** Ensure `webVersionCache` in `whatsapp.ts` is strictly pinned to `2.2412.54`. Do not upgrade this blindly, as Meta frequently breaks headless clients.
+- **AI isn't formatting products correctly?** Check the 800-line `SYSTEM_PROMPT` in `agent.ts`.
 
 ## Cost Estimates
 
-- WhatsApp: Free for first 1,000 conversations/month, then ~$0.05/conversation
-- Claude Sonnet: ~$0.003 per message (1K tokens in, 500 out)
-- Vercel: Free tier should handle ~100K requests/month
+- **WhatsApp API:** $0 (Bypassed entirely).
+- **OpenAI gpt-4o-mini:** fractions of a cent per conversation. Highly cost-effective.
+- **Railway Hosting:** ~$5/mo depending on RAM usage.
 
 ## Future Enhancements
-
-- [ ] Order tracking integration (OpenCart)
-- [ ] PDF quote generation
-- [ ] Voice message transcription (Whisper)
-- [ ] Image recognition for product inquiries
-- [ ] Automated follow-ups for abandoned quotes
-- [ ] Multi-language support (Afrikaans, Zulu)
+- [ ] Implement persistent Volumes on Railway to avoid re-scanning QR codes.
+- [ ] Add more granular `tool_calls` for tracking OpenCart order statuses.
