@@ -98,14 +98,18 @@ async function bootstrap() {
                         try {
                             const buffer = Buffer.from(media.data, 'base64');
                             const pdfData = await pdfParse(buffer);
-                            if (pdfData.text) {
+                            if (pdfData.text && pdfData.text.trim().length > 0) {
                                 text = text + `\n\n[USER UPLOADED A PDF DOCUMENT. EXTRACTED TEXT:]\n${pdfData.text}\n[END OF PDF DOCUMENT]`;
                                 console.log(`[PDF Received] Extracted ${pdfData.text.length} characters of text.`);
+                            } else {
+                                text = text + `\n\n[SYSTEM COMMAND TO AI: The user uploaded a PDF, but no text could be extracted. It might be a scanned image. Tell the user this.]`;
                             }
-                        } catch (err) {
+                        } catch (err: any) {
+                            text = text + `\n\n[SYSTEM COMMAND TO AI: The user uploaded a PDF, but the system threw an error while parsing it: ${err.message}. Tell the user this.]`;
                             console.error('[PDF Parse Error]', err);
                         }
                     } else {
+                        text = text + `\n\n[SYSTEM COMMAND TO AI: The user uploaded an unsupported media file with mimetype: ${media.mimetype}. Tell the user this.]`;
                         console.log(`[Media Received] Unsupported media type: ${media.mimetype}`);
                     }
                 }
