@@ -16,7 +16,7 @@
     "mysql2": "^3.18.0",
     "node-cron": "^4.2.1",
     "openai": "^6.22.0",
-    "pdf-parse": "^2.4.5",
+    "pdf-parse": "^1.1.1",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "tsx": "^4.7.1",
