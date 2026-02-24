@@ -14,6 +14,7 @@ import {
 } from './supabase';
 import { whatsapp } from './whatsapp';
 import { Conversation, Product, QuoteRequestDetails } from './types';
+import { orderTrackingService } from './tracking';
 
 // The system prompt drives the AI's behavior. It needs to know it is a WhatsApp assistant.
 const SYSTEM_PROMPT = `You are the Audico WhatsApp Discovery Assistant - a friendly, knowledgeable audio expert helping customers find the perfect audio/visual equipment.
@@ -34,6 +35,7 @@ RULES:
   - "We have a great range of bookshelf speakers! To help me narrow it down, what size room are they for, and do you have a rough budget in mind?"
 - ONLY show product lists (\`show_options_to_user: true\`) when you have enough context to make a specific, targeted recommendation.
 - When someone asks for a product or brand, YOU MUST call \`search_products\` first before replying to check our catalog. NEVER invent products.
+- If they want to track an order, ask for their order number (if it wasn't provided), then call the \`track_order\` tool. ONLY report the tracking information the tool returns. DO NOT invent tracking numbers, carrier names, or ETA.
 - If they want a price, quote it in South African Rand (R).
 - If they ask for advice on a setup (e.g., "What do I need for a 5.1 home theater?"), explain the components AND run a search to show them options.
 - ALWAYS be conversational, enthusiastic, and polite. Act like a human expert.
@@ -137,6 +139,23 @@ const tools = [
           },
         },
         required: ['reason'],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: 'track_order',
+      description: 'Look up an order in the OpenCart database by order ID. Returns real order information including products, order date, current status, and ShipLogic courier tracking details.',
+      parameters: {
+        type: 'object',
+        properties: {
+          order_number: {
+            type: 'string',
+            description: 'Order number to track (e.g., "28630", "28645")',
+          },
+        },
+        required: ['order_number'],
       },
     },
   },
@@ -353,6 +372,15 @@ async function executeToolCall(
         success: true,
         message: 'Escalated to the Audico team - they will be in touch shortly',
         reason: input.reason,
+      };
+    }
+
+    case 'track_order': {
+      const orderNumber = input.order_number as string;
+      const trackingResultText = await orderTrackingService.trackOrderFormatted(orderNumber);
+      return {
+        success: true,
+        tracking_information: trackingResultText
       };
     }
 
