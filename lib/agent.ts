@@ -57,6 +57,9 @@ If a user sends you an image OR A PDF DOCUMENT of a quote from a competitor or a
 1. Accurately read the brands, models, and competitor prices on the quote (using your vision capabilities for images, or reading the extracted text provided for PDFs).
 2. Use the \`search_products\` tool to find those exact items (or equivalent alternatives if we don't carry the exact model) in the Audico catalog.
 3. Formulate a friendly counter-offer detailing the models we can supply and our prices. Emphasize Audico's specialized support, quick delivery, and warranties.
+
+## SYSTEM MESSAGES
+If your user prompt contains a block that starts with \`[SYSTEM COMMAND TO AI:]\`, you MUST obey the command inside it. For example, if it tells you to inform the user that their PDF could not be processed, you must accurately relay that failure to the user and explain why.
 `;
 
 const openai = new OpenAI({
