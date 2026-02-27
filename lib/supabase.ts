@@ -35,25 +35,27 @@ export async function searchProducts(
   } = options;
 
   try {
-    // Use hybrid text search (passing null for query_embedding)
-    const { data, error } = await supabase.rpc('hybrid_product_search', {
-      query_text: query,
-      query_embedding: null,
-      min_price: minPrice,
-      max_price: maxPrice,
-      brand_filter: brand,
-      category_filter: category,
-      use_case_filter: null,
-      in_stock_only: inStockOnly,
-      result_limit: limit,
-      bm25_weight: 1.0,
-      vector_weight: 0.0,
-    });
+    // Use native websearch_to_tsquery for accurate strict text matching
+    let productQuery = supabase
+      .from('products')
+      .select('*')
+      .textSearch('product_name', query, {
+        type: 'websearch',
+        config: 'english'
+      })
+      .gte('retail_price', minPrice)
+      .lte('retail_price', maxPrice)
+      .gt('total_stock', inStockOnly ? 0 : -1);
+
+    if (brand) productQuery = productQuery.ilike('brand', `%${brand}%`);
+    if (category) productQuery = productQuery.ilike('category', `%${category}%`);
+
+    const { data, error } = await productQuery.limit(limit);
 
     if (error) {
-      console.error('[Search] BM25 search error:', error);
+      console.error('[Search] textSearch error:', error);
 
-      // Fallback to simple text search
+      // Fallback to simple ILIKE search if textSearch fails (e.g., query parser error)
       const { data: fallbackData, error: fallbackError } = await supabase
         .from('products')
         .select('*')
