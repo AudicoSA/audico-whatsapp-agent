@@ -1,6 +1,8 @@
 import { Client, LocalAuth } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 import { updateWhatsappState } from './supabase';
+import fs from 'fs';
+import path from 'path';
 
 export class WhatsAppClient {
   public client: Client;
@@ -122,7 +124,30 @@ export class WhatsAppClient {
   }
 
   public async initialize(): Promise<void> {
+    // Clear stale Chrome profile locks left by previous containers (persistent volume issue)
+    this.clearChromeLocks();
     await this.client.initialize();
+  }
+
+  private clearChromeLocks() {
+    const authDir = './.whatsapp_auth';
+    try {
+      const walkAndRemoveLocks = (dir: string) => {
+        if (!fs.existsSync(dir)) return;
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const fullPath = path.join(dir, entry.name);
+          if (entry.isDirectory()) {
+            walkAndRemoveLocks(fullPath);
+          } else if (entry.name === 'SingletonLock' || entry.name === 'SingletonCookie' || entry.name === 'SingletonSocket') {
+            fs.unlinkSync(fullPath);
+            console.log(`[WhatsApp] Removed stale lock: ${fullPath}`);
+          }
+        }
+      };
+      walkAndRemoveLocks(authDir);
+    } catch (err) {
+      console.log('[WhatsApp] No lock files to clear (first boot).');
+    }
   }
 
   public getHealthStatus() {
