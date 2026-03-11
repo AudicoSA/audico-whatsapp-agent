@@ -51,6 +51,17 @@ app.get('/', async (req, res) => {
     `);
 });
 
+// Health/debug endpoint for diagnosing connection issues
+app.get('/health', (req, res) => {
+    const health = whatsapp.getHealthStatus();
+    res.json({
+        status: health.isReady ? 'ok' : 'degraded',
+        whatsapp: health,
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString(),
+    });
+});
+
 // Start Express server
 app.listen(port as number, '0.0.0.0', () => {
     console.log(`[App] Web server listening on port ${port}`);

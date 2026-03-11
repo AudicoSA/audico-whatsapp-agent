@@ -453,7 +453,12 @@ export async function sendAgentResponse(
   agentResponse: AgentResponse
 ): Promise<void> {
   // Send main message
-  await whatsapp.sendText(phone, agentResponse.message);
+  const sent = await whatsapp.sendText(phone, agentResponse.message);
+  if (!sent) {
+    console.error(`[Agent] ❌ FAILED to send reply to ${phone} — WhatsApp client not ready. Response was: ${agentResponse.message.substring(0, 100)}...`);
+  } else {
+    console.log(`[Agent] ✔️ Reply sent to ${phone}`);
+  }
 
   // If products were shown, send as interactive list
   if (agentResponse.productsShown && agentResponse.productsShown.length > 0) {

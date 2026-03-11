@@ -5,31 +5,42 @@ import { updateWhatsappState } from './supabase';
 export class WhatsAppClient {
   public client: Client;
   private isReady: boolean = false;
+  private reconnectAttempts: number = 0;
+  private readonly maxReconnectAttempts: number = 10;
 
   public latestQrCode: string | null = null;
   public isConnected: boolean = false;
+  public lastStateChange: string = 'init';
+  public lastStateTime: Date = new Date();
 
-  constructor() {
-    console.log('[WhatsApp] Initializing Web Client...');
-
-    // Use LocalAuth to save session data so we don't have to scan the QR code every time
-    this.client = new Client({
+  private createClient(): Client {
+    return new Client({
       authStrategy: new LocalAuth({
         dataPath: './.whatsapp_auth',
       }),
-      // Fix for recent WhatsApp Web updates breaking sendMessage silently
       webVersionCache: {
         type: 'remote',
         remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
       },
-      // Puppeteer arguments to ensure it runs well on Railway/Linux
       puppeteer: {
         args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       }
     });
+  }
 
+  constructor() {
+    console.log('[WhatsApp] Initializing Web Client...');
+    this.client = this.createClient();
     this.setupListeners();
+  }
+
+  private updateState(state: string, ready: boolean, connected: boolean) {
+    this.lastStateChange = state;
+    this.lastStateTime = new Date();
+    this.isReady = ready;
+    this.isConnected = connected;
+    console.log(`[WhatsApp] State → ${state} (ready=${ready}, connected=${connected})`);
   }
 
   private setupListeners() {
@@ -39,34 +50,64 @@ export class WhatsAppClient {
       console.log('==================================================\n');
       qrcode.generate(qr, { small: true });
       this.latestQrCode = qr;
+      this.updateState('qr_received', false, false);
 
-      // Push QR code to Supabase so we can read it elsewhere (e.g. locally or dashboard)
       await updateWhatsappState({ is_connected: false, qr_code: qr });
     });
 
     this.client.on('ready', async () => {
       console.log('[WhatsApp] ✔️ Client is ready and connected!');
-      this.isReady = true;
-      this.isConnected = true;
+      this.updateState('ready', true, true);
       this.latestQrCode = null;
+      this.reconnectAttempts = 0; // Reset on successful connection
 
       await updateWhatsappState({ is_connected: true, qr_code: null });
     });
 
     this.client.on('authenticated', () => {
       console.log('[WhatsApp] ✔️ Authenticated successfully.');
+      this.updateState('authenticated', this.isReady, this.isConnected);
     });
 
-    this.client.on('auth_failure', (msg) => {
+    this.client.on('auth_failure', async (msg) => {
       console.error('[WhatsApp] ❌ Authentication failed:', msg);
+      this.updateState('auth_failure', false, false);
+    });
+
+    // Track WA Web internal state changes for better debugging
+    this.client.on('change_state', (state) => {
+      console.log(`[WhatsApp] WA Web state changed to: ${state}`);
+      // CONNECTED state means WA Web is live — trust it even if ready hasn't fired
+      if (state === 'CONNECTED') {
+        this.updateState('wa_connected', true, true);
+      }
     });
 
     this.client.on('disconnected', async (reason) => {
-      console.log('[WhatsApp] ⚠️ Client was disconnected:', reason);
-      this.isReady = false;
-      this.isConnected = false;
+      console.log(`[WhatsApp] ⚠️ Client was disconnected: ${reason}`);
+      this.updateState('disconnected', false, false);
 
       await updateWhatsappState({ is_connected: false, qr_code: null });
+
+      // Auto-reconnect with exponential backoff
+      if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts), 120000); // 5s → 120s max
+        this.reconnectAttempts++;
+        console.log(`[WhatsApp] Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+        setTimeout(async () => {
+          try {
+            console.log('[WhatsApp] Attempting reconnection...');
+            this.client.destroy().catch(() => {}); // Clean up old client
+            this.client = this.createClient();
+            this.setupListeners();
+            await this.client.initialize();
+          } catch (err) {
+            console.error('[WhatsApp] Reconnection failed:', err);
+          }
+        }, delay);
+      } else {
+        console.error('[WhatsApp] Max reconnect attempts reached. Manual intervention needed.');
+      }
     });
   }
 
@@ -75,6 +116,20 @@ export class WhatsAppClient {
    */
   public async initialize(): Promise<void> {
     await this.client.initialize();
+  }
+
+  /**
+   * Get current health status for debugging
+   */
+  public getHealthStatus() {
+    return {
+      isReady: this.isReady,
+      isConnected: this.isConnected,
+      lastState: this.lastStateChange,
+      lastStateTime: this.lastStateTime.toISOString(),
+      hasQrCode: !!this.latestQrCode,
+      reconnectAttempts: this.reconnectAttempts,
+    };
   }
 
   /**
