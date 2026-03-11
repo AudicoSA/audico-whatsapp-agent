@@ -76,8 +76,8 @@ async function bootstrap() {
     // Start background services
     abandonedCartService.startCron();
 
-    // Listen for incoming messages
-    whatsapp.client.on('message', async (message) => {
+    // Listen for incoming messages (uses onMessage so handler survives reconnects)
+    whatsapp.onMessage(async (message) => {
         // Ignore group messages or status broadcasts for now
         if (message.from.endsWith('@g.us') || message.from === 'status@broadcast') {
             return;
