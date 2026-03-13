@@ -74,10 +74,12 @@ class AbandonedCartService {
                 }
                 const formattedPhone = `${phone}@c.us`;
 
-                // Check Supabase if we've messaged them in the last 24 hours to prevent spam
+                // Check Supabase if we've messaged THIS customer in the last 24 hours to prevent spam
+                const conversation = await getOrCreateConversation(formattedPhone, cart.firstname);
                 const { data: recentMsgs, error } = await supabase
                     .from('whatsapp_messages')
                     .select('id, created_at')
+                    .eq('conversation_id', conversation.id)
                     .eq('sender_type', 'assistant')
                     .like('content', '%COMEBACK10%')
                     .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())

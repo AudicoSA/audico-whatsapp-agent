@@ -105,18 +105,21 @@ export async function getOrCreateConversation(
   phoneNumber: string,
   customerName?: string
 ): Promise<Conversation> {
-  // Check for existing active conversation
-  const { data: existing } = await supabase
+  // Check for existing conversation (active, escalated, or pending_quote)
+  const { data: rows, error: fetchError } = await supabase
     .from('whatsapp_conversations')
     .select('*')
     .eq('phone_number', phoneNumber)
-    .eq('status', 'active')
+    .in('status', ['active', 'escalated', 'pending_quote'])
     .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+    .limit(1);
 
-  if (existing) {
-    return existing as Conversation;
+  if (fetchError) {
+    console.error('[Conversation] Fetch error:', fetchError);
+  }
+
+  if (rows && rows.length > 0) {
+    return rows[0] as Conversation;
   }
 
   // Create new conversation

@@ -292,9 +292,9 @@ export async function processMessage(
           }
         }
 
-        if (functionName === 'submit_quote_request' || functionName === 'escalate') {
+        if ((functionName === 'submit_quote_request' || functionName === 'escalate') && toolResult.success) {
           escalated = true;
-          // Update the conversation state in the DB immediately
+          // Only update conversation status if the tool actually succeeded
           await updateConversation(conversation.id, {
             status: functionName === 'submit_quote_request' ? 'pending_quote' : 'escalated',
             context: {
