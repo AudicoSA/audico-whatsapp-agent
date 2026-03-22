@@ -3,7 +3,7 @@ import express from 'express';
 import QRCode from 'qrcode';
 const pdfParse = require('pdf-parse');
 import { whatsapp } from './lib/whatsapp';
-import { getOrCreateConversation } from './lib/supabase';
+import { getOrCreateConversation, saveChatMessage, fetchPendingOutbound, claimOutbound, markOutboundSent, markOutboundFailed } from './lib/supabase';
 import { processMessage, sendAgentResponse } from './lib/agent';
 import { abandonedCartService } from './lib/abandoned-cart';
 
@@ -75,6 +75,7 @@ async function bootstrap() {
 
     // Start background services
     abandonedCartService.startCron();
+    startOutboundPoller();
 
     // Listen for incoming messages (uses onMessage so handler survives reconnects)
     whatsapp.onMessage(async (message) => {
@@ -145,6 +146,44 @@ async function bootstrap() {
             message.reply("Sorry, I'm having a technical moment! 😅 Let me clear my circuits, please try again in a minute.");
         }
     });
+}
+
+/**
+ * Poll the outbound queue every 3 seconds and send any pending messages.
+ * Messages are queued from the Jarvis dashboard when Kenny replies manually.
+ */
+async function startOutboundPoller() {
+    console.log('[Outbound] Queue poller started (every 3s)');
+    setInterval(async () => {
+        if (!whatsapp.isConnected) return;
+
+        try {
+            const pending = await fetchPendingOutbound();
+            for (const msg of pending) {
+                const claimed = await claimOutbound(msg.id);
+                if (!claimed) continue;
+
+                console.log(`[Outbound] Sending to ${msg.phone_number}: ${msg.message.substring(0, 60)}...`);
+                const sent = await whatsapp.sendText(msg.phone_number, msg.message);
+
+                if (sent) {
+                    await markOutboundSent(msg.id);
+                    if (msg.conversation_id) {
+                        await saveChatMessage(msg.conversation_id, 'assistant', msg.message, {
+                            source: 'dashboard',
+                            sent_by: msg.sent_by,
+                        });
+                    }
+                    console.log(`[Outbound] Sent successfully`);
+                } else {
+                    await markOutboundFailed(msg.id, 'sendText returned false');
+                    console.error(`[Outbound] Failed to send`);
+                }
+            }
+        } catch (err) {
+            console.error('[Outbound] Poller error:', err);
+        }
+    }, 3000);
 }
 
 // Global unhandled rejection handler to prevent crashes

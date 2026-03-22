@@ -281,4 +281,60 @@ export async function getRecentMessages(
   return (data || []).reverse();
 }
 
+/**
+ * Fetch pending outbound messages from the queue
+ */
+export async function fetchPendingOutbound(): Promise<Array<{
+  id: string;
+  conversation_id: string;
+  phone_number: string;
+  message: string;
+  sent_by: string;
+}>> {
+  const { data, error } = await supabase
+    .from('whatsapp_outbound_queue')
+    .select('id, conversation_id, phone_number, message, sent_by')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+    .limit(10);
+
+  if (error) {
+    console.error('[Outbound] Fetch error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
+ * Mark an outbound message as sending (claim it)
+ */
+export async function claimOutbound(id: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('whatsapp_outbound_queue')
+    .update({ status: 'sending' })
+    .eq('id', id)
+    .eq('status', 'pending');
+  return !error;
+}
+
+/**
+ * Mark an outbound message as sent
+ */
+export async function markOutboundSent(id: string): Promise<void> {
+  await supabase
+    .from('whatsapp_outbound_queue')
+    .update({ status: 'sent', sent_at: new Date().toISOString() })
+    .eq('id', id);
+}
+
+/**
+ * Mark an outbound message as failed
+ */
+export async function markOutboundFailed(id: string, error: string): Promise<void> {
+  await supabase
+    .from('whatsapp_outbound_queue')
+    .update({ status: 'failed', error })
+    .eq('id', id);
+}
+
 export { supabase };
