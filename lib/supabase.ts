@@ -105,7 +105,8 @@ export async function getQuoteById(quoteId: string): Promise<any | null> {
   const { data, error } = await supabase
     .from('quotes')
     .select('*')
-    .eq('id', quoteId)
+    .or(`quote_id.eq.${quoteId},invoice_number.eq.${quoteId}`)
+    .limit(1)
     .single();
 
   if (error) {
