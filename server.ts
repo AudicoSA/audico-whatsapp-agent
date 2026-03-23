@@ -3,7 +3,7 @@ import express from 'express';
 import QRCode from 'qrcode';
 const pdfParse = require('pdf-parse');
 import { whatsapp } from './lib/whatsapp';
-import { getOrCreateConversation, saveChatMessage, fetchPendingOutbound, claimOutbound, markOutboundSent, markOutboundFailed } from './lib/supabase';
+import { getOrCreateConversation, saveChatMessage, fetchPendingOutbound, claimOutbound, markOutboundSent, markOutboundFailed, updateConversation } from './lib/supabase';
 import { processMessage, sendAgentResponse } from './lib/agent';
 import { abandonedCartService } from './lib/abandoned-cart';
 
@@ -132,6 +132,24 @@ async function bootstrap() {
 
             // 2. If conversation was already escalated or pending_quote, let the customer know
             //    their request is with the team — don't restart the AI flow
+            const lowerText = text.toLowerCase().trim();
+            const wantsNew = lowerText.includes('new question') || 
+                             lowerText.includes('fresh conversation') || 
+                             lowerText.includes('start over') ||
+                             lowerText.includes('new chat') ||
+                             lowerText.includes('restart');
+
+            if (wantsNew && (conversation.status === 'escalated' || conversation.status === 'pending_quote')) {
+                // Mark this conversation as completely closed/resolved so human agents know it's done
+                await updateConversation(conversation.id, { status: 'completed' });
+                await saveChatMessage(conversation.id, 'user', text);
+                await whatsapp.sendText(
+                    customerPhone,
+                    `No problem! I've cleared the previous chat. What can I help you with today? 🤖`
+                );
+                return;
+            }
+
             if (conversation.status === 'escalated' || conversation.status === 'pending_quote') {
                 const statusLabel = conversation.status === 'pending_quote' ? 'quote request' : 'enquiry';
                 await whatsapp.sendText(
