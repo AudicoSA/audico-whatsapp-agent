@@ -123,12 +123,11 @@ export async function getOrCreateConversation(
   phoneNumber: string,
   customerName?: string
 ): Promise<Conversation> {
-  // Check for existing conversation (active, escalated, or pending_quote)
+  // Check for the most recent conversation
   const { data: rows, error: fetchError } = await supabase
     .from('whatsapp_conversations')
     .select('*')
     .eq('phone_number', phoneNumber)
-    .in('status', ['active', 'escalated', 'pending_quote'])
     .order('created_at', { ascending: false })
     .limit(1);
 
@@ -136,8 +135,12 @@ export async function getOrCreateConversation(
     console.error('[Conversation] Fetch error:', fetchError);
   }
 
+  // If the absolute latest conversation exists and is not 'completed' or 'resolved'
   if (rows && rows.length > 0) {
-    return rows[0] as Conversation;
+    const latest = rows[0];
+    if (latest.status !== 'completed' && latest.status !== 'resolved' && latest.status !== 'closed') {
+      return latest as Conversation;
+    }
   }
 
   // Create new conversation
