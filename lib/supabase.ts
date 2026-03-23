@@ -99,6 +99,24 @@ export async function getProductById(productId: string): Promise<Product | null>
 }
 
 /**
+ * Get quote by ID (used for Audico Chat Quote System proformas)
+ */
+export async function getQuoteById(quoteId: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('quotes')
+    .select('*')
+    .eq('id', quoteId)
+    .single();
+
+  if (error) {
+    console.error('[Quote] Get by ID error:', error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
  * Get or create conversation for a phone number
  */
 export async function getOrCreateConversation(

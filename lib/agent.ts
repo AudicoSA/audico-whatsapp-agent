@@ -10,6 +10,7 @@ import {
   saveChatMessage,
   updateConversation,
   saveQuoteRequest,
+  getQuoteById,
   supabase
 } from './supabase';
 import { whatsapp } from './whatsapp';
@@ -60,6 +61,9 @@ If a user sends you an image OR A PDF DOCUMENT of a quote from a competitor or a
 
 ## SYSTEM MESSAGES
 If your user prompt contains a block that starts with \`[SYSTEM COMMAND TO AI:]\`, you MUST obey the command inside it. For example, if it tells you to inform the user that their PDF could not be processed, you must accurately relay that failure to the user and explain why.
+
+## QUOTE LOOKUPS
+If a user asks about a "Quote proforma" or provides a Quote ID from our chat quote system, you MUST use the \`get_quote_by_id\` tool to retrieve the quote details. You can then summarize the items, quantities, and total price to the customer.
 `;
 
 const openai = new OpenAI({
@@ -192,6 +196,23 @@ const tools = [
           },
         },
         required: ['query'],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: 'get_quote_by_id',
+      description: 'Retrieve a formal quote (proforma) by its Quote ID. Use this when a customer asks about an existing quote.',
+      parameters: {
+        type: 'object',
+        properties: {
+          quote_id: {
+            type: 'string',
+            description: 'The unique quote ID (typically a UUID format like 123e4567-e89b-12d3-a456-426614174000)',
+          },
+        },
+        required: ['quote_id'],
       },
     },
   },
@@ -437,6 +458,21 @@ async function executeToolCall(
       return {
         success: true,
         stock_information: stockInfo
+      };
+    }
+
+    case 'get_quote_by_id': {
+      const quoteId = input.quote_id as string;
+      const quoteDetails = await getQuoteById(quoteId);
+      if (!quoteDetails) {
+        return {
+          success: false,
+          error: `Quote with ID ${quoteId} could not be found.`
+        };
+      }
+      return {
+        success: true,
+        quote_data: quoteDetails
       };
     }
 

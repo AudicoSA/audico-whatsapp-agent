@@ -130,7 +130,20 @@ async function bootstrap() {
             // 1. Get or create conversation context in Supabase
             const conversation = await getOrCreateConversation(customerPhone, customerName);
 
-            // 2. Process message through the agent
+            // 2. If conversation was already escalated or pending_quote, let the customer know
+            //    their request is with the team — don't restart the AI flow
+            if (conversation.status === 'escalated' || conversation.status === 'pending_quote') {
+                const statusLabel = conversation.status === 'pending_quote' ? 'quote request' : 'enquiry';
+                await whatsapp.sendText(
+                    customerPhone,
+                    `Hi there! Your ${statusLabel} has already been passed to the Audico team and they'll be in touch with you shortly. If you have a new or different question, just let me know and I'll start a fresh conversation for you! 😊`
+                );
+                // Save the customer's follow-up message for the team to see
+                await saveChatMessage(conversation.id, 'user', text);
+                return;
+            }
+
+            // 3. Process message through the agent
             const agentResponse = await processMessage(
                 conversation,
                 text,
@@ -138,7 +151,7 @@ async function bootstrap() {
                 base64Image
             );
 
-            // 3. Send response back to WhatsApp
+            // 4. Send response back to WhatsApp
             await sendAgentResponse(customerPhone, agentResponse);
 
         } catch (error) {
