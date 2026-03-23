@@ -258,7 +258,24 @@ export class OrderTrackingService {
         try {
             connection = await this.getConnection();
 
-            const searchTerm = `%${searchQuery}%`;
+            const terms = searchQuery.trim().split(/\s+/).filter(t => t.length > 0);
+            
+            if (terms.length === 0) {
+                return "Please provide a valid product name to search for stock.";
+            }
+
+            let whereClause = `pd.language_id = 1 AND p.status = 1`;
+            const queryParams: any[] = [];
+
+            const termConditions = terms.map(term => {
+                queryParams.push(`%${term}%`); // for name
+                queryParams.push(`%${term}%`); // for model
+                return '(pd.name LIKE ? OR p.model LIKE ?)';
+            });
+            
+            if (termConditions.length > 0) {
+                whereClause += ' AND (' + termConditions.join(' AND ') + ')';
+            }
 
             // Query OpenCart database for product stock
             const [products] = await connection.execute<mysql.RowDataPacket[]>(
@@ -271,9 +288,9 @@ export class OrderTrackingService {
                  FROM ${this.tablePrefix}product p 
                  LEFT JOIN ${this.tablePrefix}product_description pd ON p.product_id = pd.product_id 
                  LEFT JOIN ${this.tablePrefix}stock_status ss ON p.stock_status_id = ss.stock_status_id AND ss.language_id = 1
-                 WHERE pd.language_id = 1 AND p.status = 1 AND (pd.name LIKE ? OR p.model LIKE ?)
+                 WHERE ${whereClause}
                  LIMIT 10`,
-                [searchTerm, searchTerm]
+                queryParams
             );
 
             if (products.length === 0) {
