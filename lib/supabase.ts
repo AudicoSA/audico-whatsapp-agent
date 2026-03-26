@@ -40,11 +40,11 @@ export async function searchProducts(
 ): Promise<Product[]> {
   const {
     limit = 5,
-    minPrice = 1,
+    minPrice = 0,
     maxPrice = 999999999,
     brand = null,
     category = null,
-    inStockOnly = true,
+    inStockOnly = false,
   } = options;
 
   try {
