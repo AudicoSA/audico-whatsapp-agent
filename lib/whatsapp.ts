@@ -1,4 +1,4 @@
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import qrcode from 'qrcode-terminal';
 import { updateWhatsappState } from './supabase';
 import fs from 'fs';
@@ -176,6 +176,39 @@ export class WhatsAppClient {
       return !!response.id;
     } catch (error) {
       console.error('[WhatsApp] Failed to send message:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Send a document (PDF, etc.) via a public URL.
+   * Used by the outbound poller to deliver quote PDFs from the dashboard.
+   */
+  public async sendDocument(
+    to: string,
+    documentUrl: string,
+    filename?: string,
+    caption?: string
+  ): Promise<boolean> {
+    if (!this.isReady) {
+      console.error('[WhatsApp] Cannot send document - client is not ready');
+      return false;
+    }
+
+    try {
+      const formattedTo = to.includes('@c.us') || to.includes('@lid') || to.includes('@g.us')
+        ? to
+        : `${to.replace(/[^0-9]/g, '')}@c.us`;
+
+      const media = await MessageMedia.fromUrl(documentUrl, { unsafeMime: true });
+      if (filename) media.filename = filename;
+
+      const response = await this.client.sendMessage(formattedTo, media, {
+        caption: caption || undefined,
+      });
+      return !!response.id;
+    } catch (error) {
+      console.error('[WhatsApp] Failed to send document:', error);
       return false;
     }
   }

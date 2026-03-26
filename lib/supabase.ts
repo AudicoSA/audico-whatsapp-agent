@@ -369,10 +369,14 @@ export async function fetchPendingOutbound(): Promise<Array<{
   phone_number: string;
   message: string;
   sent_by: string;
+  message_type: string;
+  document_url: string | null;
+  document_filename: string | null;
+  caption: string | null;
 }>> {
   const { data, error } = await supabase
     .from('whatsapp_outbound_queue')
-    .select('id, conversation_id, phone_number, message, sent_by')
+    .select('id, conversation_id, phone_number, message, sent_by, message_type, document_url, document_filename, caption')
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
     .limit(10);

@@ -194,20 +194,38 @@ async function startOutboundPoller() {
                 const claimed = await claimOutbound(msg.id);
                 if (!claimed) continue;
 
-                console.log(`[Outbound] Sending to ${msg.phone_number}: ${msg.message.substring(0, 60)}...`);
-                const sent = await whatsapp.sendText(msg.phone_number, msg.message);
+                let sent = false;
+                const isDocument = msg.message_type === 'document' && msg.document_url;
+
+                if (isDocument) {
+                    console.log(`[Outbound] Sending document to ${msg.phone_number}: ${msg.document_filename || msg.document_url}`);
+                    sent = await whatsapp.sendDocument(
+                        msg.phone_number,
+                        msg.document_url!,
+                        msg.document_filename || undefined,
+                        msg.caption || undefined,
+                    );
+                } else {
+                    console.log(`[Outbound] Sending to ${msg.phone_number}: ${(msg.message || '').substring(0, 60)}...`);
+                    sent = await whatsapp.sendText(msg.phone_number, msg.message);
+                }
 
                 if (sent) {
                     await markOutboundSent(msg.id);
                     if (msg.conversation_id) {
-                        await saveChatMessage(msg.conversation_id, 'assistant', msg.message, {
+                        const content = isDocument
+                            ? `📄 Document sent: ${msg.document_filename || 'file'}\n${msg.caption || ''}`
+                            : msg.message;
+                        await saveChatMessage(msg.conversation_id, 'assistant', content, {
                             source: 'dashboard',
                             sent_by: msg.sent_by,
+                            ...(isDocument ? { document_url: msg.document_url, document_filename: msg.document_filename } : {}),
                         });
                     }
                     console.log(`[Outbound] Sent successfully`);
                 } else {
-                    await markOutboundFailed(msg.id, 'sendText returned false');
+                    const errorMsg = isDocument ? 'sendDocument returned false' : 'sendText returned false';
+                    await markOutboundFailed(msg.id, errorMsg);
                     console.error(`[Outbound] Failed to send`);
                 }
             }
