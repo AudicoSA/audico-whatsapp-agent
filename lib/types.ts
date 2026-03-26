@@ -25,11 +25,10 @@ export interface ConversationContext {
 }
 
 export interface QuoteRequestDetails {
-  budget: string;
-  room_size: string;
-  use_case: string;
-  specific_brands: string;
-  timeline: string;
+  customer_name: string;
+  company_name: string;
+  email: string;
+  products_of_interest: string;
   additional_notes: string;
 }
 

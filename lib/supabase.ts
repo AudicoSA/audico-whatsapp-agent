@@ -12,6 +12,19 @@ const supabase = createClient(
 );
 
 /**
+ * Normalize query by splitting joined letter-number boundaries
+ * e.g. "Control4" -> "Control 4", "LS50" -> "LS 50"
+ * This handles cases where products are stored with spaces between letters and numbers.
+ */
+function normalizeQuery(query: string): string {
+  return query
+    .replace(/([a-zA-Z])(\d)/g, '$1 $2')   // "Control4" -> "Control 4"
+    .replace(/(\d)([a-zA-Z])/g, '$1 $2')   // "4Core" -> "4 Core"
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Search products using hybrid search (semantic + keyword)
  */
 export async function searchProducts(
@@ -54,26 +67,70 @@ export async function searchProducts(
 
     if (error) {
       console.error('[Search] textSearch error:', error);
+    }
 
-      // Fallback to simple ILIKE search if textSearch fails (e.g., query parser error)
-      const { data: fallbackData, error: fallbackError } = await supabase
+    // If textSearch returned results, use them
+    if (!error && data && data.length > 0) {
+      return data as Product[];
+    }
+
+    // Fallback: try ILIKE with the original query
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('products')
+      .select('*')
+      .ilike('product_name', `%${query}%`)
+      .gte('retail_price', minPrice)
+      .lte('retail_price', maxPrice)
+      .gt('total_stock', inStockOnly ? 0 : -1)
+      .limit(limit);
+
+    if (!fallbackError && fallbackData && fallbackData.length > 0) {
+      return fallbackData as Product[];
+    }
+
+    // Fallback 2: try with normalized query (split letter-number boundaries)
+    // e.g. "Control4 Core" -> "Control 4 Core"
+    const normalized = normalizeQuery(query);
+    if (normalized !== query) {
+      console.log(`[Search] Retrying with normalized query: "${normalized}"`);
+
+      // Try textSearch with normalized query
+      let normQuery = supabase
         .from('products')
         .select('*')
-        .ilike('product_name', `%${query}%`)
+        .textSearch('product_name', normalized, {
+          type: 'websearch',
+          config: 'english'
+        })
+        .gte('retail_price', minPrice)
+        .lte('retail_price', maxPrice)
+        .gt('total_stock', inStockOnly ? 0 : -1);
+
+      if (brand) normQuery = normQuery.ilike('brand', `%${brand}%`);
+      if (category) normQuery = normQuery.ilike('category', `%${category}%`);
+
+      const { data: normData, error: normError } = await normQuery.limit(limit);
+
+      if (!normError && normData && normData.length > 0) {
+        return normData as Product[];
+      }
+
+      // Final fallback: ILIKE with normalized query
+      const { data: normFallback, error: normFallbackError } = await supabase
+        .from('products')
+        .select('*')
+        .ilike('product_name', `%${normalized}%`)
         .gte('retail_price', minPrice)
         .lte('retail_price', maxPrice)
         .gt('total_stock', inStockOnly ? 0 : -1)
         .limit(limit);
 
-      if (fallbackError) {
-        console.error('[Search] Fallback error:', fallbackError);
-        return [];
+      if (!normFallbackError && normFallback && normFallback.length > 0) {
+        return normFallback as Product[];
       }
-
-      return (fallbackData || []) as Product[];
     }
 
-    return (data || []) as Product[];
+    return [];
   } catch (err) {
     console.error('[Search] Exception:', err);
     return [];
