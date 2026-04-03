@@ -16,6 +16,7 @@ import {
 import { whatsapp } from './whatsapp';
 import { Conversation, Product, QuoteRequestDetails } from './types';
 import { orderTrackingService } from './tracking';
+import { generateQuote, pollAndSendQuotePdf, QuoteItem } from './wade';
 
 // The system prompt drives the AI's behavior. It needs to know it is a WhatsApp assistant.
 const SYSTEM_PROMPT = `You are the Audico WhatsApp Discovery Assistant - a friendly, knowledgeable audio expert helping customers find the perfect audio/visual equipment.
@@ -44,6 +45,7 @@ RULES:
 - NEVER provide links to supplier, manufacturer or competitor websites (e.g., homemation.co.za). We are Audico.
 - If you provide a product link or "More Info" link, it MUST be an Audico link. Either use https://www.audicoonline.co.za or build a search link like https://www.audicoonline.co.za/index.php?route=product/search&search=[URL_ENCODED_PRODUCT_NAME].
 - When a customer wants a quote, ask them for their Name, Company Name (if applicable), and Email address. Once you have their contact details and the products/items they are interested in, use the \`submit_quote_request\` tool.
+- QUOTE GENERATION: If a customer sends a CLEAR product/quantity quote request (e.g., "I need 2x Shure SM58 and 1x Denon AVR-X1800"), use the \`generate_quote\` tool to create a formal quote via our quoting system. Parse the specific products and quantities from their message. After calling generate_quote, ALWAYS ask: "Got it — I'm preparing your quote now. Before I send it, please confirm billing details: Company or Individual? Registered name (if company)? VAT number (optional)? Email address for the invoice? Delivery address (if delivery needed)?"
 - If a customer asks about a complex multi-room setup, or a very high-budget commercial installation, use the \`escalate\` tool immediately.
 
 ## AUDICO CONTACT & STORE INFORMATION
@@ -227,6 +229,49 @@ const tools = [
           },
         },
         required: ['quote_id'],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: 'generate_quote',
+      description: 'Generate a formal quote when a customer has specified clear products and quantities. This sends the request to our quoting system (Wade) which will prepare a PDF quote. Use this instead of submit_quote_request when the customer has given specific product names and quantities.',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            description: 'The list of products and quantities the customer wants quoted.',
+            items: {
+              type: 'object',
+              properties: {
+                product_name: {
+                  type: 'string',
+                  description: 'The product name (e.g., "Shure SM58", "Denon AVR-X1800H")',
+                },
+                quantity: {
+                  type: 'number',
+                  description: 'How many units the customer wants',
+                },
+                notes: {
+                  type: 'string',
+                  description: 'Any notes for this line item (e.g., "with clip", "black finish")',
+                },
+              },
+              required: ['product_name', 'quantity'],
+            },
+          },
+          customer_name: {
+            type: 'string',
+            description: 'The customer\'s name if known, otherwise "WhatsApp Customer".',
+          },
+          customer_email: {
+            type: 'string',
+            description: 'The customer\'s email if already provided.',
+          },
+        },
+        required: ['items'],
       },
     },
   },
@@ -488,6 +533,55 @@ async function executeToolCall(
         success: true,
         quote_data: quoteDetails
       };
+    }
+
+    case 'generate_quote': {
+      const items = input.items as QuoteItem[];
+      const customerName = (input.customer_name as string) || conversation.customer_name || 'WhatsApp Customer';
+      const customerEmail = (input.customer_email as string) || '';
+
+      try {
+        const result = await generateQuote({
+          message_id: conversation.id,
+          customer_name: customerName,
+          customer_phone: customerPhone,
+          customer_email: customerEmail,
+          items,
+        });
+
+        // Start background polling for the PDF — don't block the reply
+        pollAndSendQuotePdf(result.quote_number, customerPhone).catch(err => {
+          console.error('[Wade] Background PDF poll failed:', err);
+        });
+
+        // Update conversation status
+        await updateConversation(conversation.id, {
+          status: 'pending_quote',
+          context: {
+            ...conversation.context,
+            quote_number: result.quote_number,
+            draft_id: result.draft_id,
+          } as any,
+        });
+
+        // Build response with out-of-stock hint if needed
+        let message = `Quote ${result.quote_number} is being prepared.`;
+        if (result.metadata?.out_of_stock) {
+          message += ' Note: One or more items are currently out of stock. Would you like me to quote the recommended alternative?';
+        }
+
+        return {
+          success: true,
+          quote_number: result.quote_number,
+          message,
+        };
+      } catch (err: any) {
+        console.error('[Wade] generate_quote failed:', err);
+        return {
+          success: false,
+          error: "I couldn't prepare the quote just now. I've flagged this to a human — we'll get back to you shortly.",
+        };
+      }
     }
 
     default:

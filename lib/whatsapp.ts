@@ -213,6 +213,42 @@ export class WhatsAppClient {
     }
   }
 
+  /**
+   * Send a document from a raw Buffer (e.g., PDF fetched from Jarvis/Wade).
+   */
+  public async sendDocumentBuffer(
+    to: string,
+    fileBuffer: Buffer,
+    filename: string,
+    caption?: string
+  ): Promise<boolean> {
+    if (!this.isReady) {
+      console.error('[WhatsApp] Cannot send document - client is not ready');
+      return false;
+    }
+
+    try {
+      const formattedTo = to.includes('@c.us') || to.includes('@lid') || to.includes('@g.us')
+        ? to
+        : `${to.replace(/[^0-9]/g, '')}@c.us`;
+
+      const media = new MessageMedia(
+        'application/pdf',
+        fileBuffer.toString('base64'),
+        filename
+      );
+
+      await this.client.sendMessage(formattedTo, media, {
+        caption: caption || '',
+        sendMediaAsDocument: true,
+      });
+      return true;
+    } catch (error) {
+      console.error('[WhatsApp] Failed to send document buffer:', error);
+      return false;
+    }
+  }
+
   public async sendProductOptions(to: string, products: any[], header?: string): Promise<boolean> {
     let text = header ? `*${header}*\n\n` : '';
 

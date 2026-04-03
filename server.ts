@@ -6,9 +6,11 @@ import { whatsapp } from './lib/whatsapp';
 import { getOrCreateConversation, saveChatMessage, fetchPendingOutbound, claimOutbound, markOutboundSent, markOutboundFailed, updateConversation } from './lib/supabase';
 import { processMessage, sendAgentResponse } from './lib/agent';
 import { abandonedCartService } from './lib/abandoned-cart';
+import { fetchQuotePdf } from './lib/wade';
 
 // Set up Express server for QR Code
 const app = express();
+app.use(express.json());
 const port = process.env.PORT || 8080;
 
 app.get('/', async (req, res) => {
@@ -60,6 +62,47 @@ app.get('/health', (req, res) => {
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
     });
+});
+
+/**
+ * Webhook: Jarvis calls this when a Wade quote PDF is approved and ready to send.
+ * POST /api/webhooks/quote-ready
+ * Body: { quote_number: string, customer_phone: string }
+ */
+app.post('/api/webhooks/quote-ready', async (req, res) => {
+    const { quote_number, customer_phone } = req.body;
+
+    if (!quote_number || !customer_phone) {
+        return res.status(400).json({ error: 'Missing quote_number or customer_phone' });
+    }
+
+    console.log(`[Webhook] Quote ready: ${quote_number} for ${customer_phone}`);
+
+    try {
+        const pdfBuffer = await fetchQuotePdf(quote_number);
+
+        if (!pdfBuffer) {
+            return res.status(404).json({ error: `PDF not found for ${quote_number}` });
+        }
+
+        const sent = await whatsapp.sendDocumentBuffer(
+            customer_phone,
+            pdfBuffer,
+            `Audico_Quote_${quote_number}.pdf`,
+            `Here's your Audico quote ${quote_number}. It's valid for 7 days. Let me know if you want to proceed and I'll send a pro-forma invoice.`
+        );
+
+        if (sent) {
+            console.log(`[Webhook] PDF sent to ${customer_phone}`);
+            res.json({ success: true, message: 'PDF sent to customer' });
+        } else {
+            console.error(`[Webhook] Failed to send PDF to ${customer_phone}`);
+            res.status(500).json({ error: 'Failed to send PDF via WhatsApp' });
+        }
+    } catch (err: any) {
+        console.error('[Webhook] quote-ready error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Start Express server
