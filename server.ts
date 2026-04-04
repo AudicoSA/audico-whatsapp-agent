@@ -246,7 +246,7 @@ async function startOutboundPoller() {
                         msg.phone_number,
                         msg.document_url!,
                         msg.document_filename || undefined,
-                        msg.caption || undefined,
+                        msg.caption || msg.message || undefined,
                     );
                 } else {
                     console.log(`[Outbound] Sending to ${msg.phone_number}: ${(msg.message || '').substring(0, 60)}...`);

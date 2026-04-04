@@ -205,6 +205,7 @@ export class WhatsAppClient {
 
       const response = await this.client.sendMessage(formattedTo, media, {
         caption: caption || undefined,
+        sendMediaAsDocument: true,
       });
       return !!response.id;
     } catch (error) {
