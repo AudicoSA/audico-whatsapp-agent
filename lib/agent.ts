@@ -16,7 +16,7 @@ import {
 import { whatsapp } from './whatsapp';
 import { Conversation, Product, QuoteRequestDetails } from './types';
 import { orderTrackingService } from './tracking';
-import { generateQuote, pollAndSendQuotePdf, QuoteItem } from './wade';
+import type { QuoteItem } from './wade';
 
 // The system prompt drives the AI's behavior. It needs to know it is a WhatsApp assistant.
 const SYSTEM_PROMPT = `You are the Audico WhatsApp Discovery Assistant - a friendly, knowledgeable audio expert helping customers find the perfect audio/visual equipment.
@@ -541,45 +541,50 @@ async function executeToolCall(
       const customerEmail = (input.customer_email as string) || '';
 
       try {
-        const result = await generateQuote({
-          message_id: conversation.id,
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          customer_email: customerEmail,
-          items,
-        });
+        // Write quote request directly to Supabase — Wade (local agent) picks it up
+        // on his next cycle and generates the PDF. No localhost callback needed.
+        const productsJson = JSON.stringify(items.map(i => ({
+          product_name: i.product_name,
+          quantity: i.quantity,
+          notes: i.notes || '',
+        })));
 
-        // Start background polling for the PDF — don't block the reply
-        pollAndSendQuotePdf(result.quote_number, customerPhone).catch(err => {
-          console.error('[Wade] Background PDF poll failed:', err);
-        });
+        const { data: row, error } = await supabase
+          .from('whatsapp_quote_requests')
+          .insert({
+            phone_number: customerPhone,
+            customer_name: customerName,
+            customer_email: customerEmail,
+            products: productsJson,
+            status: 'new',
+            notes: `source=whatsapp_chat conversation_id=${conversation.id}`,
+          })
+          .select()
+          .single();
+
+        if (error) throw new Error(error.message);
+
+        const requestId = row?.id;
+        console.log(`[Wade] Quote request saved to Supabase: ${requestId} for ${customerPhone}`);
 
         // Update conversation status
         await updateConversation(conversation.id, {
           status: 'pending_quote',
           context: {
             ...conversation.context,
-            quote_number: result.quote_number,
-            draft_id: result.draft_id,
+            quote_request_id: requestId,
           } as any,
         });
 
-        // Build response with out-of-stock hint if needed
-        let message = `Quote ${result.quote_number} is being prepared.`;
-        if (result.metadata?.out_of_stock) {
-          message += ' Note: One or more items are currently out of stock. Would you like me to quote the recommended alternative?';
-        }
-
         return {
           success: true,
-          quote_number: result.quote_number,
-          message,
+          message: `Your quote request has been submitted. Our team is preparing it now — you'll receive the PDF quote on this WhatsApp within a few minutes.`,
         };
       } catch (err: any) {
         console.error('[Wade] generate_quote failed:', err);
         return {
           success: false,
-          error: "I couldn't prepare the quote just now. I've flagged this to a human — we'll get back to you shortly.",
+          error: "I couldn't submit the quote request just now. I've flagged this to a human — we'll get back to you shortly.",
         };
       }
     }
