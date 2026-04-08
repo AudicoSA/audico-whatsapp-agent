@@ -291,20 +291,38 @@ export async function updateConversation(
 }
 
 /**
- * Save a finalized quote request from the AI agent into the database
+ * Save a finalized quote request from the AI agent into the database.
+ *
+ * The whatsapp_quote_requests table has flat columns (customer_name, customer_email,
+ * products, notes) — NOT a single `details` JSONB column. Wade reads `products`
+ * as a structured array, so we parse the free-text products_of_interest string
+ * (e.g. "1x Sonos Beam Gen2 Black" or "1x wiim amp ultra and 1 x wiim amp pro")
+ * into [{product_name, quantity, notes}, ...].
+ *
+ * Status is set to 'routed_to_wade' so Wade's 10-min cycle picks it up immediately.
  */
 export async function saveQuoteRequest(
   phoneNumber: string,
   customerName: string | undefined,
   details: QuoteRequestDetails
 ): Promise<QuoteRequest> {
+  const products = parseProductsOfInterest(details.products_of_interest);
+
+  // Combine company name into notes so it isn't lost (no dedicated column)
+  const noteParts: string[] = [];
+  if (details.company_name) noteParts.push(`Company: ${details.company_name}`);
+  if (details.additional_notes) noteParts.push(details.additional_notes);
+  const notes = noteParts.join(' | ');
+
   const { data, error } = await supabase
     .from('whatsapp_quote_requests')
     .insert({
       phone_number: phoneNumber,
-      customer_name: customerName,
-      status: 'new',
-      details: details,
+      customer_name: details.customer_name || customerName,
+      customer_email: details.email,
+      products,
+      notes,
+      status: 'routed_to_wade',
     })
     .select()
     .single();
@@ -315,6 +333,25 @@ export async function saveQuoteRequest(
   }
 
   return data as QuoteRequest;
+}
+
+/**
+ * Parse a free-text product list ("1x Sonos Beam Gen2 Black",
+ * "1x wiim amp ultra and 1 x wiim amp pro", "Denon Home 150NV, Denon AVR-X2800H")
+ * into the structured array Wade expects.
+ */
+function parseProductsOfInterest(text: string): Array<{ product_name: string; quantity: number; notes: string }> {
+  if (!text || !text.trim()) return [];
+  // Split on " and " or "," — both are common separators in customer messages
+  const tokens = text.split(/\s+and\s+|,/i).map((t) => t.trim()).filter(Boolean);
+  return tokens.map((token) => {
+    // Match a leading quantity prefix like "1x", "2 x", "3X "
+    const m = token.match(/^(\d+)\s*[xX]\s+(.+)$/);
+    if (m) {
+      return { product_name: m[2].trim(), quantity: parseInt(m[1], 10), notes: '' };
+    }
+    return { product_name: token, quantity: 1, notes: '' };
+  });
 }
 
 /**
