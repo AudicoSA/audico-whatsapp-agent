@@ -197,7 +197,7 @@ async function bootstrap() {
                 const statusLabel = conversation.status === 'pending_quote' ? 'quote request' : 'enquiry';
                 await whatsapp.sendText(
                     customerPhone,
-                    `Hi there! Your ${statusLabel} has already been passed to the Audico team and they'll be in touch with you shortly. If you have a new or different question, just let me know and I'll start a fresh conversation for you! 😊`
+                    `Hi there! Your ${statusLabel} has already been passed to the Audico team and they'll be in touch with you shortly.\n\nIf you'd like to ask something else, just reply *"new chat"* and I'll start a fresh conversation for you! 😊`
                 );
                 // Save the customer's follow-up message for the team to see
                 await saveChatMessage(conversation.id, 'user', text);
