@@ -130,6 +130,44 @@ export async function searchProducts(
       }
     }
 
+    // SOFT-BRAND FALLBACK: if brand was specified and nothing matched, retry
+    // without the brand filter. Real-world data has corrupted brand fields
+    // (e.g. "Black" or "Unknown" instead of the actual manufacturer), so a
+    // strict brand AND-filter throws away otherwise-good name matches.
+    // Hyphen-stripping in the query also catches "AVR-X580BT" vs "AVRX580BT".
+    if (brand) {
+      console.log(`[Search] No hits with brand="${brand}", retrying without brand filter`);
+      const queryVariants = [query, query.replace(/-/g, ''), query.replace(/-/g, ' ')];
+      for (const variant of queryVariants) {
+        if (!variant) continue;
+        const { data: softData } = await supabase
+          .from('products')
+          .select('*')
+          .ilike('product_name', `%${variant}%`)
+          .gte('retail_price', minPrice)
+          .lte('retail_price', maxPrice)
+          .gt('total_stock', inStockOnly ? 0 : -1)
+          .limit(limit);
+        if (softData && softData.length > 0) {
+          return softData as Product[];
+        }
+      }
+    } else if (query.includes('-')) {
+      // Even without brand specified, try hyphen-stripped if the original missed
+      const stripped = query.replace(/-/g, '');
+      const { data: hyphData } = await supabase
+        .from('products')
+        .select('*')
+        .ilike('product_name', `%${stripped}%`)
+        .gte('retail_price', minPrice)
+        .lte('retail_price', maxPrice)
+        .gt('total_stock', inStockOnly ? 0 : -1)
+        .limit(limit);
+      if (hyphData && hyphData.length > 0) {
+        return hyphData as Product[];
+      }
+    }
+
     return [];
   } catch (err) {
     console.error('[Search] Exception:', err);
